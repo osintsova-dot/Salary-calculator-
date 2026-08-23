@@ -1115,6 +1115,8 @@ const TEACHER_INITIALS = {
 let state = JSON.parse(localStorage.getItem('ss_salary_state') || 'null') || {
   pupils: Object.fromEntries(GROUPS.map((g, i) => [i, g.pupils]))
 };
+// выручка, посчитанная самой CRM (уже со скидками); нет данных — считаем по тарифу
+if (!state.crmRev) state.crmRev = {};
 
 function fmt(n) {
   return n.toLocaleString('ru-RU') + ' ₽';
@@ -1130,7 +1132,8 @@ function statusDot(p) {
 function calcGroup(i) {
   const g = GROUPS[i];
   const p = state.pupils[i] || 0;
-  const revenue = p * TARIFF[g.dur];
+  const fromCrm = (state.crmRev && state.crmRev[i] != null) ? +state.crmRev[i] : null;
+  const revenue = fromCrm !== null ? fromCrm : p * TARIFF[g.dur];
   const fot = Math.round(revenue * TEACHER_PCT);
   const hands = fot - DEPOSIT;
   return { revenue, fot, hands: Math.max(0, hands), deposit: DEPOSIT };
@@ -1845,8 +1848,9 @@ function bbMatch(bbName) {
 }
 
 function applyBigBen(list) {
-  const changed = [], same = [], unknown = [], missed = [];
+  const changed = [], same = [], unknown = [], missed = [], money = [];
   const touched = new Set();
+  if (!state.crmRev) state.crmRev = {};
   list.forEach(item => {
     const name = item.n || item.name, pupils = +(item.p !== undefined ? item.p : item.pupils);
     const i = bbMatch(name);
@@ -1855,6 +1859,15 @@ function applyBigBen(list) {
     const was = state.pupils[i] || 0;
     if (was !== pupils) { state.pupils[i] = pupils; changed.push(GROUPS[i].name + ': ' + was + ' → ' + pupils); }
     else same.push(GROUPS[i].name);
+    // выручка из отчёта CRM — уже со скидками
+    if (item.r !== undefined && item.r !== null && !isNaN(+item.r)) {
+      state.crmRev[i] = Math.round(+item.r);
+      const tariff = pupils * TARIFF[GROUPS[i].dur];
+      const note = (item.d ? ', −5%: ' + item.d : '') + (item.f ? ', бесплатно: ' + item.f : '');
+      money.push(GROUPS[i].name + ': ' + fmt(Math.round(+item.r)) + (tariff !== Math.round(+item.r) ? ' (по тарифу было бы ' + fmt(tariff) + ')' : '') + note);
+    } else {
+      delete state.crmRev[i];
+    }
   });
   GROUPS.forEach((g, i) => { if (!touched.has(i)) missed.push(g.name); });
   render();
@@ -1869,6 +1882,7 @@ function applyBigBen(list) {
     box.innerHTML =
       '<div style="background:var(--purple-light);border-radius:12px;padding:12px 14px;margin-bottom:14px">' +
       '<div style="font-size:13px;font-weight:700;color:var(--purple);margin-bottom:8px">Данные из BigBen · ' + list.length + ' групп</div>' +
+      block('Выручка из CRM, со скидками', money, 'var(--purple)', money.length) +
       block('Изменилось', changed, 'var(--purple)', changed.length) +
       block('Без изменений', [same.join(', ')].filter(x => x), 'var(--gray-600)', same.length) +
       block('Нет в калькуляторе', unknown, '#E8740A', unknown.length) +
@@ -1903,15 +1917,31 @@ function closeBigBenOverlay(e) { if (e.target.id === 'bigbenModal') closeBigBenM
   const LIVE = 'https://osintsova-dot.github.io/Salary-calculator-/';
   const target = /^https?:\/\/(127\.|localhost)/.test(location.href) ? LIVE : (location.origin + location.pathname);
   const code = "(async()=>{try{" +
-    "if(!location.host.includes('bigbencrm.ru')){alert('Открой сначала админку BigBen: panel.bigbencrm.ru');return;}" +
+    "if(!location.host.includes('bigbencrm.ru')){alert('\\u041e\\u0442\\u043a\\u0440\\u043e\\u0439 \\u0441\\u043d\\u0430\\u0447\\u0430\\u043b\\u0430 BigBen: panel.bigbencrm.ru');return;}" +
     "const grab=async(f)=>{const r=await fetch('/admin/index.php?obj=groups&filter='+f,{credentials:'include'});" +
     "const d=new DOMParser().parseFromString(await r.text(),'text/html');const o=[];" +
     "d.querySelectorAll('table tr').forEach(tr=>{const c=tr.children;if(c.length<3)return;" +
     "const m=(c[0].textContent||'').replace(/\\s+/g,' ').trim().match(/^(.*?)\\s*\\u0441\\u0442\\u0443\\u0434\\u0435\\u043d\\u0442\\u044b:\\s*(\\d+)/i);if(!m)return;" +
     "o.push({n:m[1].trim(),p:+m[2],t:(c[1].textContent||'').replace(/\\s+/g,' ').trim()})});return o};" +
     "const cur=await grab('current'),fut=await grab('future');const map={};" +
-    "[].concat(fut,cur).forEach(g=>{map[g.n]=g});const all=Object.values(map);" +
+    "[].concat(fut,cur).forEach(g=>{map[g.n]=g});" +
+    // выручка из отчёта «по ученикам и оплатам» за текущий месяц — она уже со скидками
+    "const nw=new Date(),y=nw.getFullYear(),mo=nw.getMonth();" +
+    "const pad=n=>String(n).padStart(2,'0');const ds=d=>d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate());" +
+    "const p1=new Date(y,mo,1),p2=new Date(y,mo+1,0);" +
+    "const rr=await fetch('/admin/index.php?obj=reportmain&action=list&report_type_id=4&filial_id=0&period_start='+ds(p1)+'&period_end='+ds(p2),{credentials:'include'});" +
+    "const dd=new DOMParser().parseFromString(await rr.text(),'text/html');let cg=null;" +
+    "dd.querySelectorAll('table').forEach(t=>{const rows=[].slice.call(t.querySelectorAll('tr'));" +
+    "const hd=(rows[0]?rows[0].textContent:'').replace(/\\s+/g,' ').trim();" +
+    "if(/^\\u0413\\u0440\\u0443\\u043f\\u043f\\u0430/.test(hd)){const c=rows[1]?[].slice.call(rows[1].children).map(x=>x.textContent.replace(/\\s+/g,' ').trim()):[];cg=c[0]||null;return;}" +
+    "if(/\\u041a \\u043e\\u043f\\u043b\\u0430\\u0442\\u0435, \\u0440\\u0443\\u0431/.test(hd)&&cg&&map[cg]){var rev=0,disc=0,free=0;" +
+    "rows.slice(1).forEach(tr=>{const c=[].slice.call(tr.children).map(x=>x.textContent.replace(/\\s+/g,' ').trim());" +
+    "if(c.length<8||!/^\\d+$/.test(c[0]))return;const base=parseFloat(c[4]||'0'),ind=parseFloat(c[5]||'0'),sum=parseFloat((c[7]||'0').replace(',','.'));" +
+    "rev+=isNaN(sum)?0:sum;if(ind===0)free++;else if(ind<base-0.001)disc++;});" +
+    "map[cg].r=Math.round(rev);map[cg].d=disc;map[cg].f=free;}});" +
+    "const all=Object.values(map);" +
     "if(!all.length){alert('\\u0413\\u0440\\u0443\\u043f\\u043f\\u044b \\u043d\\u0435 \\u043d\\u0430\\u0439\\u0434\\u0435\\u043d\\u044b');return;}" +
+    "all.push({mon:y+'-'+pad(mo+1)});" +
     "window.open('" + target + "#bb='+btoa(unescape(encodeURIComponent(JSON.stringify(all)))),'_blank');" +
     "}catch(e){alert('\\u041e\\u0448\\u0438\\u0431\\u043a\\u0430: '+e.message)}})()";
   const a = document.getElementById('bbLink');
