@@ -770,16 +770,25 @@
       <div style="display:flex;align-items:center;padding:12px 24px">
         <div style="flex:1">
           <div class="admin-name" style="font-size:14px">Отработки онлайн</div>
-          <div class="admin-rule">1 500 ₽ за 60 мин</div>
+          <div class="admin-rule">1 500 ₽ за 60 мин · 2 250 ₽ за 90 мин</div>
         </div>
-        <div style="display:flex;align-items:center;gap:16px">
+        <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap;justify-content:flex-end">
           <div>
-            <div class="admin-item-label" style="text-align:right">Количество</div>
+            <div class="admin-item-label" style="text-align:right">60 мин</div>
             <div class="counter" style="margin-top:4px">
-              <button data-action="fixedCounter" data-key="otrabotki" data-delta="-0.5">−</button>
-              <input type="number" min="0" step="0.5" id="otrabotkiCount" value="0"
-                data-fixkey="otrabotki" style="width:60px;height:28px;text-align:center;border:1.5px solid var(--gray-200);border-left:none;border-right:none;font-family:var(--mono);font-size:13px;font-weight:500;background:#fff;">
-              <button data-action="fixedCounter" data-key="otrabotki" data-delta="0.5">+</button>
+              <button data-action="fixedCounter" data-key="otrabotki60" data-delta="-1">−</button>
+              <input type="number" min="0" step="1" id="otrabotki60Count" value="0"
+                data-fixkey="otrabotki60" style="width:52px;height:28px;text-align:center;border:1.5px solid var(--gray-200);border-left:none;border-right:none;font-family:var(--mono);font-size:13px;font-weight:500;background:#fff;">
+              <button data-action="fixedCounter" data-key="otrabotki60" data-delta="1">+</button>
+            </div>
+          </div>
+          <div>
+            <div class="admin-item-label" style="text-align:right">90 мин</div>
+            <div class="counter" style="margin-top:4px">
+              <button data-action="fixedCounter" data-key="otrabotki90" data-delta="-1">−</button>
+              <input type="number" min="0" step="1" id="otrabotki90Count" value="0"
+                data-fixkey="otrabotki90" style="width:52px;height:28px;text-align:center;border:1.5px solid var(--gray-200);border-left:none;border-right:none;font-family:var(--mono);font-size:13px;font-weight:500;background:#fff;">
+              <button data-action="fixedCounter" data-key="otrabotki90" data-delta="1">+</button>
             </div>
           </div>
           <div class="admin-item">
@@ -909,7 +918,7 @@ const TEACHER_PCT = 0.25;
 const TARIFF = { 60: 8000, 90: 10000 };
 const MAX_PUPILS = 12;
 // Editable fixed payments — loaded from localStorage
-const FIXED_DEFAULTS = { cleaning: 33000, smm: 18000, rent: 200000, adminMin: 80000, otrabotki: 0 };
+const FIXED_DEFAULTS = { cleaning: 33000, smm: 18000, rent: 200000, adminMin: 80000, otrabotki60: 0, otrabotki90: 0 };
 
 // Premium criteria per teacher (stored in localStorage)
 const PREMIUM_DEFAULTS = {
@@ -1041,6 +1050,11 @@ function renderPremiumBlock() {
   });
 }
 let fixedState = Object.assign({}, FIXED_DEFAULTS, JSON.parse(localStorage.getItem('ss_fixed') || '{}'));
+// раньше отработки считались одним полем в «единицах по 1500 ₽» — переносим в 60-минутные
+if (fixedState.otrabotki !== undefined) {
+  if (!fixedState.otrabotki60 && !fixedState.otrabotki90) fixedState.otrabotki60 = fixedState.otrabotki;
+  delete fixedState.otrabotki;
+}
 function saveFixedState() { localStorage.setItem('ss_fixed', JSON.stringify(fixedState)); }
 
 // ДАННЫЕ ГРУПП (актуальные на 2026-2027)
@@ -1130,7 +1144,7 @@ function render() {
 
   const adminPct = Math.round(totalRevenue * ADMIN_PCT);
   const adminPay = Math.max(adminPct, fixedState.adminMin);
-  const otrabotkiPay = fixedState.otrabotki * 1500;
+  const otrabotkiPay = (fixedState.otrabotki60 || 0) * 1500 + (fixedState.otrabotki90 || 0) * 2250;
   const fixedTotal = adminPay + fixedState.cleaning + fixedState.smm + fixedState.rent + otrabotkiPay;
   const totalAllPay = totalHands + fixedTotal;
 
@@ -1181,7 +1195,8 @@ function render() {
   document.getElementById('cleaningVal').textContent = fmt(fixedState.cleaning);
   document.getElementById('smmVal').textContent = fmt(fixedState.smm);
   document.getElementById('rentVal').textContent = fmt(fixedState.rent);
-  document.getElementById('otrabotkiCount').value = fixedState.otrabotki;
+  document.getElementById('otrabotki60Count').value = fixedState.otrabotki60 || 0;
+  document.getElementById('otrabotki90Count').value = fixedState.otrabotki90 || 0;
   document.getElementById('otrabotkiTotal').textContent = fmt(Math.round(otrabotkiPay));
   document.getElementById('fixedTotal').textContent = fmt(fixedTotal);
 
@@ -1364,14 +1379,18 @@ updateMonth();
 render();
 renderPremiumBlock();
 
-// Input listener for otrabotki (float support)
-document.getElementById('otrabotkiCount').addEventListener('input', function() {
-  const n = parseFloat(this.value);
-  if (!isNaN(n) && n >= 0) {
-    fixedState.otrabotki = Math.round(n * 10) / 10;
-    saveFixedState();
-    render();
-  }
+// Отработки: два счётчика — 60 и 90 минут
+['otrabotki60', 'otrabotki90'].forEach(key => {
+  const el = document.getElementById(key + 'Count');
+  if (!el) return;
+  el.addEventListener('input', function() {
+    const n = parseFloat(this.value);
+    if (!isNaN(n) && n >= 0) {
+      fixedState[key] = Math.round(n * 10) / 10;
+      saveFixedState();
+      render();
+    }
+  });
 });
 
 // Delegated click for slip buttons and fixed counters
