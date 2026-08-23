@@ -876,11 +876,22 @@
         <li>Открой BigBen (админку) в соседней вкладке и войди, если попросит.</li>
         <li>Нажми закладку — откроется калькулятор с проставленными учениками.</li>
       </ol>
-      <p style="text-align:center;margin:0 0 14px">
+      <p style="text-align:center;margin:0 0 8px">
         <a id="bbLink" href="#" onclick="return false" style="
           display:inline-block;font-family:var(--font);font-size:13px;font-weight:700;
           padding:10px 18px;border-radius:22px;background:var(--purple);color:#fff;
           text-decoration:none;cursor:grab">⬇️ BigBen → калькулятор</a>
+      </p>
+      <p style="text-align:center;margin:0 0 14px">
+        <button onclick="copyBookmarklet(this)" style="
+          font-family:var(--font);font-size:12px;font-weight:600;
+          padding:6px 12px;border-radius:18px;cursor:pointer;
+          border:1.5px solid var(--gray-200);color:var(--gray-600);background:none">
+          📋 Скопировать код закладки
+        </button>
+        <span style="display:block;font-size:11px;color:var(--gray-400);margin-top:6px">
+          если перетащить не вышло: Закладки → Добавить закладку → Правка → вставить в адрес
+        </span>
       </p>
       <details style="font-size:12px;color:var(--gray-600)">
         <summary style="cursor:pointer">Не получилось перетащить — вставить данные вручную</summary>
@@ -1875,6 +1886,14 @@ function applyBigBenPaste() {
 }
 
 function openBigBenModal() { document.getElementById('bigbenModal').classList.add('open'); }
+function copyBookmarklet(btn) {
+  const href = document.getElementById('bbLink').getAttribute('href') || '';
+  navigator.clipboard.writeText(href).then(() => {
+    const was = btn.textContent;
+    btn.textContent = '✅ Скопировано';
+    setTimeout(() => btn.textContent = was, 2000);
+  });
+}
 function closeBigBenModal() { document.getElementById('bigbenModal').classList.remove('open'); }
 function closeBigBenOverlay(e) { if (e.target.id === 'bigbenModal') closeBigBenModal(); }
 
