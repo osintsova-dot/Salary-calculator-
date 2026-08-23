@@ -636,6 +636,13 @@
       background:none;white-space:nowrap;transition:all 0.15s;">
       🗂 История
     </button>
+    <button onclick="openBigBenModal()" style="
+      font-family:var(--font);font-size:12px;font-weight:600;
+      padding:7px 14px;border-radius:20px;cursor:pointer;
+      border:1.5px solid var(--gray-200);color:var(--gray-600);
+      background:none;white-space:nowrap;transition:all 0.15s;">
+      ⬇️ Из BigBen
+    </button>
   </div>
 
   <!-- SUMMARY CARDS -->
@@ -842,6 +849,44 @@
 </div>
 
 <!-- PRINT AREA (hidden, shown only on print) -->
+
+<!-- BIGBEN IMPORT -->
+<div class="modal-overlay" id="bigbenModal" onclick="closeBigBenOverlay(event)">
+  <div class="modal" onclick="event.stopPropagation()" style="max-width:520px">
+    <div style="padding:24px 24px 0;display:flex;align-items:center;justify-content:space-between">
+      <div>
+        <div style="font-size:16px;font-weight:700">⬇️ Ученики из BigBen</div>
+        <div style="font-size:12px;color:var(--gray-400);margin-top:2px">Одна кнопка — все группы всех педагогов</div>
+      </div>
+      <button onclick="closeBigBenModal()" style="background:none;border:none;font-size:20px;cursor:pointer;color:var(--gray-400)">✕</button>
+    </div>
+    <div style="padding:18px 24px 24px">
+      <div id="bbReport"></div>
+      <ol style="font-size:13px;line-height:1.7;color:var(--gray-600);padding-left:18px;margin:0 0 14px">
+        <li>Один раз: перетащи кнопку ниже на панель закладок браузера.</li>
+        <li>Открой BigBen (админку) в соседней вкладке и войди, если попросит.</li>
+        <li>Нажми закладку — откроется калькулятор с проставленными учениками.</li>
+      </ol>
+      <p style="text-align:center;margin:0 0 14px">
+        <a id="bbLink" href="#" onclick="return false" style="
+          display:inline-block;font-family:var(--font);font-size:13px;font-weight:700;
+          padding:10px 18px;border-radius:22px;background:var(--purple);color:#fff;
+          text-decoration:none;cursor:grab">⬇️ BigBen → калькулятор</a>
+      </p>
+      <details style="font-size:12px;color:var(--gray-600)">
+        <summary style="cursor:pointer">Не получилось перетащить — вставить данные вручную</summary>
+        <textarea id="bbPaste" placeholder="Сюда можно вставить JSON из закладки" style="
+          width:100%;height:90px;margin-top:8px;font-family:var(--mono);font-size:11px;
+          border:1px solid var(--gray-200);border-radius:10px;padding:8px"></textarea>
+        <button onclick="applyBigBenPaste()" style="
+          margin-top:6px;font-family:var(--font);font-size:12px;font-weight:600;
+          padding:7px 14px;border-radius:20px;cursor:pointer;
+          border:1.5px solid var(--purple);color:var(--purple);background:none">Применить</button>
+      </details>
+    </div>
+  </div>
+</div>
+
 <div id="printArea" style="display:none"></div>
 
 <!-- SLIP MODAL -->
@@ -1744,6 +1789,107 @@ function copySlip() {
     setTimeout(() => btn.textContent = '📋 Скопировать', 2000);
   });
 }
+// ---------- ИМПОРТ УЧЕНИКОВ ИЗ BIGBEN ----------
+// Кнопка-закладка снимает со страницы «Группы» в админке BigBen список
+// «название группы + сколько учеников» и открывает калькулятор со ссылкой #bb=…
+
+const CYR2LAT = {'а':'a','в':'b','с':'c','е':'e','к':'k','м':'m','н':'h','о':'o','р':'p','т':'t','у':'y','х':'x'};
+
+function bbNorm(name) {
+  let t = (name || '').toLowerCase();
+  t = t.replace(/[авсекмнортух]/g, ch => CYR2LAT[ch] || ch);
+  t = t.replace(/give\s*me\s*five/g, 'gmf')
+       .replace(/genki\s*english/g, 'genki')
+       .replace(/get\s*involved/g, 'getinvolved');
+  return t.replace(/[^a-z0-9]/g, '');
+}
+
+// BigBen называет группы без буквы потока (PREPARE 3), в калькуляторе — с буквой (Prepare 3A).
+function bbMatch(bbName) {
+  const key = bbNorm(bbName);
+  let idx = GROUPS.findIndex(g => bbNorm(g.name) === key);
+  if (idx >= 0) return idx;
+  const loose = GROUPS.map((g, i) => ({ i, n: bbNorm(g.name) }))
+                      .filter(o => o.n.length === key.length + 1 && o.n.startsWith(key));
+  return loose.length === 1 ? loose[0].i : -1;
+}
+
+function applyBigBen(list) {
+  const changed = [], same = [], unknown = [], missed = [];
+  const touched = new Set();
+  list.forEach(item => {
+    const name = item.n || item.name, pupils = +(item.p !== undefined ? item.p : item.pupils);
+    const i = bbMatch(name);
+    if (i < 0) { unknown.push(name + ' · ' + pupils); return; }
+    touched.add(i);
+    const was = state.pupils[i] || 0;
+    if (was !== pupils) { state.pupils[i] = pupils; changed.push(GROUPS[i].name + ': ' + was + ' → ' + pupils); }
+    else same.push(GROUPS[i].name);
+  });
+  GROUPS.forEach((g, i) => { if (!touched.has(i)) missed.push(g.name); });
+  render();
+  localStorage.setItem('ss_salary_state', JSON.stringify(state));
+
+  const box = document.getElementById('bbReport');
+  if (box) {
+    const block = (title, arr, color, cnt) => arr.length
+      ? '<div style="margin-bottom:10px"><div style="font-size:12px;font-weight:700;color:' + color + '">' + title + ' (' + cnt + ')</div>' +
+        '<div style="font-size:12px;color:var(--gray-600);line-height:1.6">' + arr.join('<br>') + '</div></div>'
+      : '';
+    box.innerHTML =
+      '<div style="background:var(--purple-light);border-radius:12px;padding:12px 14px;margin-bottom:14px">' +
+      '<div style="font-size:13px;font-weight:700;color:var(--purple);margin-bottom:8px">Данные из BigBen · ' + list.length + ' групп</div>' +
+      block('Изменилось', changed, 'var(--purple)', changed.length) +
+      block('Без изменений', [same.join(', ')].filter(x => x), 'var(--gray-600)', same.length) +
+      block('Нет в калькуляторе', unknown, '#E8740A', unknown.length) +
+      block('Не пришли из BigBen', [missed.join(', ')].filter(x => x), '#E8740A', missed.length) +
+      '</div>';
+  }
+  return changed.length;
+}
+
+function applyBigBenPaste() {
+  const raw = (document.getElementById('bbPaste').value || '').trim();
+  if (!raw) return;
+  try { applyBigBen(JSON.parse(raw)); }
+  catch (e) { alert('Не разобрал данные: ' + e.message); }
+}
+
+function openBigBenModal() { document.getElementById('bigbenModal').classList.add('open'); }
+function closeBigBenModal() { document.getElementById('bigbenModal').classList.remove('open'); }
+function closeBigBenOverlay(e) { if (e.target.id === 'bigbenModal') closeBigBenModal(); }
+
+// Ссылка-закладка: собираем javascript: URL один раз при загрузке
+(function buildBookmarklet() {
+  const target = location.origin + location.pathname;
+  const code = "(async()=>{try{" +
+    "if(!location.host.includes('bigbencrm.ru')){alert('Открой сначала админку BigBen: panel.bigbencrm.ru');return;}" +
+    "const grab=async(f)=>{const r=await fetch('/admin/index.php?obj=groups&filter='+f,{credentials:'include'});" +
+    "const d=new DOMParser().parseFromString(await r.text(),'text/html');const o=[];" +
+    "d.querySelectorAll('table tr').forEach(tr=>{const c=tr.children;if(c.length<3)return;" +
+    "const m=(c[0].textContent||'').replace(/\\s+/g,' ').trim().match(/^(.*?)\\s*\\u0441\\u0442\\u0443\\u0434\\u0435\\u043d\\u0442\\u044b:\\s*(\\d+)/i);if(!m)return;" +
+    "o.push({n:m[1].trim(),p:+m[2],t:(c[1].textContent||'').replace(/\\s+/g,' ').trim()})});return o};" +
+    "const cur=await grab('current'),fut=await grab('future');const map={};" +
+    "[].concat(fut,cur).forEach(g=>{map[g.n]=g});const all=Object.values(map);" +
+    "if(!all.length){alert('\\u0413\\u0440\\u0443\\u043f\\u043f\\u044b \\u043d\\u0435 \\u043d\\u0430\\u0439\\u0434\\u0435\\u043d\\u044b');return;}" +
+    "window.open('" + target + "#bb='+btoa(unescape(encodeURIComponent(JSON.stringify(all)))),'_blank');" +
+    "}catch(e){alert('\\u041e\\u0448\\u0438\\u0431\\u043a\\u0430: '+e.message)}})()";
+  const a = document.getElementById('bbLink');
+  if (a) a.setAttribute('href', 'javascript:' + encodeURIComponent(code));
+})();
+
+// Приехали данные ссылкой — применяем сразу
+(function importFromHash() {
+  const m = (location.hash || '').match(/^#bb=(.+)$/);
+  if (!m) return;
+  try {
+    const list = JSON.parse(decodeURIComponent(escape(atob(m[1]))));
+    history.replaceState(null, '', location.pathname);
+    openBigBenModal();
+    applyBigBen(list);
+  } catch (e) { alert('Не смог прочитать данные из ссылки: ' + e.message); }
+})();
+
 </script>
 </body>
 </html>
