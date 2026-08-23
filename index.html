@@ -1945,11 +1945,14 @@ function closeBigBenOverlay(e) { if (e.target.id === 'bigbenModal') closeBigBenM
     "const nw=new Date(),y=nw.getFullYear(),mo=nw.getMonth();" +
     "const pad=n=>String(n).padStart(2,'0');const ds=d=>d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate());" +
     "const per=(k)=>[new Date(y,mo+k,1),new Date(y,mo+k+1,0)];" +
-    "let sh=0,rep=null;for(var k=0;k<2&&!rep;k++){const pp=per(k);" +
-    "const q=await fetch('/admin/index.php?obj=reportmain&action=list&report_type_id=4&filial_id=0&period_start='+ds(pp[0])+'&period_end='+ds(pp[1]),{credentials:'include'});" +
-    "const qd=new DOMParser().parseFromString(await q.text(),'text/html');" +
-    "if(qd.querySelectorAll('table').length>2){rep=qd;sh=k;}}" +
-    "const dd=rep||new DOMParser().parseFromString('<html></html>','text/html');let cg=null;" +
+    // почасовые группы лежат в отчёте 4, абонементные — в 7; берём оба
+    "const load=async(id,pp)=>{const q=await fetch('/admin/index.php?obj=reportmain&action=list&report_type_id='+id+'&filial_id=0&period_start='+ds(pp[0])+'&period_end='+ds(pp[1]),{credentials:'include'});" +
+    "return new DOMParser().parseFromString(await q.text(),'text/html')};" +
+    "let sh=0,reps=[];for(var k=0;k<2&&!reps.length;k++){const pp=per(k);" +
+    "const a4=await load(4,pp),a7=await load(7,pp);" +
+    "const rs=[a4,a7].filter(x=>x.querySelectorAll('table').length>2);" +
+    "if(rs.length){reps=rs;sh=k;}}" +
+    "reps.forEach(function(dd){let cg=null;" +
     "dd.querySelectorAll('table').forEach(t=>{const rows=[].slice.call(t.querySelectorAll('tr'));" +
     "const hd=(rows[0]?rows[0].textContent:'').replace(/\\s+/g,' ').trim();" +
     "if(/^\\u0413\\u0440\\u0443\\u043f\\u043f\\u0430/.test(hd)){const c=rows[1]?[].slice.call(rows[1].children).map(x=>x.textContent.replace(/\\s+/g,' ').trim()):[];cg=c[0]||null;return;}" +
@@ -1957,7 +1960,7 @@ function closeBigBenOverlay(e) { if (e.target.id === 'bigbenModal') closeBigBenM
     "rows.slice(1).forEach(tr=>{const c=[].slice.call(tr.children).map(x=>x.textContent.replace(/\\s+/g,' ').trim());" +
     "if(c.length<8||!/^\\d+$/.test(c[0]))return;const base=parseFloat(c[4]||'0'),ind=parseFloat(c[5]||'0'),sum=parseFloat((c[7]||'0').replace(',','.'));" +
     "rev+=isNaN(sum)?0:sum;if(ind===0)free++;else if(ind<base-0.001)disc++;});" +
-    "map[cg].r=Math.round(rev);map[cg].d=disc;map[cg].f=free;}});" +
+    "map[cg].r=Math.round(rev);map[cg].d=disc;map[cg].f=free;}});});" +
     "const all=Object.values(map);" +
     "if(!all.length){alert('\\u0413\\u0440\\u0443\\u043f\\u043f\\u044b \\u043d\\u0435 \\u043d\\u0430\\u0439\\u0434\\u0435\\u043d\\u044b');return;}" +
     "all.push({mon:(new Date(y,mo+sh,1)).getFullYear()+'-'+pad((new Date(y,mo+sh,1)).getMonth()+1)});" +
