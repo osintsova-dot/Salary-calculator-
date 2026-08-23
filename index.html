@@ -1899,7 +1899,9 @@ function closeBigBenOverlay(e) { if (e.target.id === 'bigbenModal') closeBigBenM
 
 // Ссылка-закладка: собираем javascript: URL один раз при загрузке
 (function buildBookmarklet() {
-  const target = location.origin + location.pathname;
+  // адрес всегда боевой: закладку могли перетащить с локальной копии
+  const LIVE = 'https://osintsova-dot.github.io/Salary-calculator-/';
+  const target = /^https?:\/\/(127\.|localhost)/.test(location.href) ? LIVE : (location.origin + location.pathname);
   const code = "(async()=>{try{" +
     "if(!location.host.includes('bigbencrm.ru')){alert('Открой сначала админку BigBen: panel.bigbencrm.ru');return;}" +
     "const grab=async(f)=>{const r=await fetch('/admin/index.php?obj=groups&filter='+f,{credentials:'include'});" +
