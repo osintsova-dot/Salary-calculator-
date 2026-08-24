@@ -1882,7 +1882,7 @@ function applyBigBen(rawList) {
       const rub = Math.round(+cell[0]);
       state.crmRev[i] = rub;
       const tariff = pupils * TARIFF[GROUPS[i].dur];
-      const note = (cell[1] ? ', −5%: ' + cell[1] : '') + (cell[2] ? ', бесплатно: ' + cell[2] : '');
+      const note = (cell[1] ? ', со скидкой: ' + cell[1] : '') + (cell[2] ? ', бесплатно: ' + cell[2] : '');
       money.push(GROUPS[i].name + ': ' + fmt(rub) + (tariff !== rub ? ' (по тарифу было бы ' + fmt(tariff) + ')' : '') + note);
     } else {
       delete state.crmRev[i];
