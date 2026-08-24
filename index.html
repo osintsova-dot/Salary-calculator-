@@ -1858,9 +1858,16 @@ function applyBigBen(rawList) {
   const changed = [], same = [], unknown = [], missed = [], money = [];
   const touched = new Set();
   if (!state.crmRev) state.crmRev = {};
-  // последний элемент — служебная метка месяца, не группа
-  const monTag = (rawList.find(x => x && x.mon && !x.n && !x.name) || {}).mon || '';
+  // служебная запись в конце списка: выручка по месяцам, не группа
+  const tag = rawList.find(x => x && !x.n && !x.name) || {};
+  const revByMonth = tag.rev || (tag.mon ? { [tag.mon]: null } : {});
   const list = rawList.filter(x => x && (x.n || x.name));
+  // берём месяц, выбранный в шапке; если данных за него нет — ближайший имеющийся
+  const wanted = (document.getElementById('monthPicker') || {}).value || '';
+  const haveMonths = Object.keys(revByMonth).filter(k => revByMonth[k]).sort();
+  const monTag = haveMonths.indexOf(wanted) >= 0 ? wanted : (haveMonths[haveMonths.length - 1] || '');
+  const revNow = monTag ? (revByMonth[monTag] || {}) : {};
+  const monthMismatch = wanted && monTag && wanted !== monTag;
   list.forEach(item => {
     const name = item.n || item.name, pupils = +(item.p !== undefined ? item.p : item.pupils);
     const i = bbMatch(name);
@@ -1870,11 +1877,13 @@ function applyBigBen(rawList) {
     if (was !== pupils) { state.pupils[i] = pupils; changed.push(GROUPS[i].name + ': ' + was + ' → ' + pupils); }
     else same.push(GROUPS[i].name);
     // выручка из отчёта CRM — уже со скидками, но только если это включено тумблером
-    if (useCrmRevenue() && item.r !== undefined && item.r !== null && !isNaN(+item.r)) {
-      state.crmRev[i] = Math.round(+item.r);
+    const cell = revNow[name] || (item.r !== undefined ? [item.r, item.d, item.f] : null);
+    if (useCrmRevenue() && cell && !isNaN(+cell[0])) {
+      const rub = Math.round(+cell[0]);
+      state.crmRev[i] = rub;
       const tariff = pupils * TARIFF[GROUPS[i].dur];
-      const note = (item.d ? ', −5%: ' + item.d : '') + (item.f ? ', бесплатно: ' + item.f : '');
-      money.push(GROUPS[i].name + ': ' + fmt(Math.round(+item.r)) + (tariff !== Math.round(+item.r) ? ' (по тарифу было бы ' + fmt(tariff) + ')' : '') + note);
+      const note = (cell[1] ? ', −5%: ' + cell[1] : '') + (cell[2] ? ', бесплатно: ' + cell[2] : '');
+      money.push(GROUPS[i].name + ': ' + fmt(rub) + (tariff !== rub ? ' (по тарифу было бы ' + fmt(tariff) + ')' : '') + note);
     } else {
       delete state.crmRev[i];
     }
@@ -1892,6 +1901,7 @@ function applyBigBen(rawList) {
     box.innerHTML =
       '<div style="background:var(--purple-light);border-radius:12px;padding:12px 14px;margin-bottom:14px">' +
       '<div style="font-size:13px;font-weight:700;color:var(--purple);margin-bottom:8px">Данные из BigBen · ' + list.length + ' групп' + (monTag ? ' · выручка за ' + monthName(monTag) : '') + '</div>' +
+      (monthMismatch ? '<div style="font-size:12px;color:#E8740A;margin-bottom:8px">В шапке выбран ' + monthName(wanted) + ', но данных за него в CRM нет — взял ' + monthName(monTag) + '.</div>' : '') +
       block('Выручка из CRM, со скидками', money, 'var(--purple)', money.length) +
       block('Изменилось', changed, 'var(--purple)', changed.length) +
       block('Без изменений', [same.join(', ')].filter(x => x), 'var(--gray-600)', same.length) +
@@ -1942,6 +1952,7 @@ function closeBigBenOverlay(e) { if (e.target.id === 'bigbenModal') closeBigBenM
   const target = /^https?:\/\/(127\.|localhost)/.test(location.href) ? LIVE : (location.origin + location.pathname);
   const code = "(async()=>{try{" +
     "if(!location.host.includes('bigbencrm.ru')){alert('\\u041e\\u0442\\u043a\\u0440\\u043e\\u0439 \\u0441\\u043d\\u0430\\u0447\\u0430\\u043b\\u0430 BigBen: panel.bigbencrm.ru');return;}" +
+    // 1. состав групп
     "const grab=async(f)=>{const r=await fetch('/admin/index.php?obj=groups&filter='+f,{credentials:'include'});" +
     "const d=new DOMParser().parseFromString(await r.text(),'text/html');const o=[];" +
     "d.querySelectorAll('table tr').forEach(tr=>{const c=tr.children;if(c.length<3)return;" +
@@ -1949,29 +1960,27 @@ function closeBigBenOverlay(e) { if (e.target.id === 'bigbenModal') closeBigBenM
     "o.push({n:m[1].trim(),p:+m[2],t:(c[1].textContent||'').replace(/\\s+/g,' ').trim()})});return o};" +
     "const cur=await grab('current'),fut=await grab('future');const map={};" +
     "[].concat(fut,cur).forEach(g=>{map[g.n]=g});" +
-    // выручка из отчёта «по ученикам и оплатам» за текущий месяц — она уже со скидками
+    // 2. выручка за текущий и соседние месяцы: отчёт 4 (почасовые) и 7 (абонементы)
     "const nw=new Date(),y=nw.getFullYear(),mo=nw.getMonth();" +
     "const pad=n=>String(n).padStart(2,'0');const ds=d=>d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate());" +
-    "const per=(k)=>[new Date(y,mo+k,1),new Date(y,mo+k+1,0)];" +
-    // почасовые группы лежат в отчёте 4, абонементные — в 7; берём оба
-    "const load=async(id,pp)=>{const q=await fetch('/admin/index.php?obj=reportmain&action=list&report_type_id='+id+'&filial_id=0&period_start='+ds(pp[0])+'&period_end='+ds(pp[1]),{credentials:'include'});" +
-    "return new DOMParser().parseFromString(await q.text(),'text/html')};" +
-    "let sh=0,reps=[];for(var k=0;k<2&&!reps.length;k++){const pp=per(k);" +
-    "const a4=await load(4,pp),a7=await load(7,pp);" +
-    "const rs=[a4,a7].filter(x=>x.querySelectorAll('table').length>2);" +
-    "if(rs.length){reps=rs;sh=k;}}" +
-    "reps.forEach(function(dd){let cg=null;" +
+    "const rev={};" +
+    "for(var k=-1;k<=1;k++){const a=new Date(y,mo+k,1),b=new Date(y,mo+k+1,0);const key=a.getFullYear()+'-'+pad(a.getMonth()+1);" +
+    "const acc={};" +
+    "for(var ri=0;ri<2;ri++){const rid=ri?7:4;" +
+    "const q=await fetch('/admin/index.php?obj=reportmain&action=list&report_type_id='+rid+'&filial_id=0&period_start='+ds(a)+'&period_end='+ds(b),{credentials:'include'});" +
+    "const dd=new DOMParser().parseFromString(await q.text(),'text/html');let cg=null;" +
     "dd.querySelectorAll('table').forEach(t=>{const rows=[].slice.call(t.querySelectorAll('tr'));" +
     "const hd=(rows[0]?rows[0].textContent:'').replace(/\\s+/g,' ').trim();" +
     "if(/^\\u0413\\u0440\\u0443\\u043f\\u043f\\u0430/.test(hd)){const c=rows[1]?[].slice.call(rows[1].children).map(x=>x.textContent.replace(/\\s+/g,' ').trim()):[];cg=c[0]||null;return;}" +
-    "if(/\\u041a \\u043e\\u043f\\u043b\\u0430\\u0442\\u0435, \\u0440\\u0443\\u0431/.test(hd)&&cg&&map[cg]){var rev=0,disc=0,free=0;" +
+    "if(/\\u041a \\u043e\\u043f\\u043b\\u0430\\u0442\\u0435, \\u0440\\u0443\\u0431/.test(hd)&&cg){var rv=0,dc=0,fr=0,any=0;" +
     "rows.slice(1).forEach(tr=>{const c=[].slice.call(tr.children).map(x=>x.textContent.replace(/\\s+/g,' ').trim());" +
-    "if(c.length<8||!/^\\d+$/.test(c[0]))return;const base=parseFloat(c[4]||'0'),ind=parseFloat(c[5]||'0'),sum=parseFloat((c[7]||'0').replace(',','.'));" +
-    "rev+=isNaN(sum)?0:sum;if(ind===0)free++;else if(ind<base-0.001)disc++;});" +
-    "map[cg].r=Math.round(rev);map[cg].d=disc;map[cg].f=free;}});});" +
+    "if(c.length<8||!/^\\d+$/.test(c[0]))return;any=1;const base=parseFloat(c[4]||'0'),ind=parseFloat(c[5]||'0'),sum=parseFloat((c[7]||'0').replace(',','.'));" +
+    "rv+=isNaN(sum)?0:sum;if(ind===0)fr++;else if(ind<base-0.001)dc++;});" +
+    "if(any)acc[cg]=[Math.round(rv),dc,fr];}});}" +
+    "if(Object.keys(acc).length)rev[key]=acc;}" +
     "const all=Object.values(map);" +
     "if(!all.length){alert('\\u0413\\u0440\\u0443\\u043f\\u043f\\u044b \\u043d\\u0435 \\u043d\\u0430\\u0439\\u0434\\u0435\\u043d\\u044b');return;}" +
-    "all.push({mon:(new Date(y,mo+sh,1)).getFullYear()+'-'+pad((new Date(y,mo+sh,1)).getMonth()+1)});" +
+    "all.push({rev:rev});" +
     "window.open('" + target + "#bb='+btoa(unescape(encodeURIComponent(JSON.stringify(all)))),'_blank');" +
     "}catch(e){alert('\\u041e\\u0448\\u0438\\u0431\\u043a\\u0430: '+e.message)}})()";
   const a = document.getElementById('bbLink');
