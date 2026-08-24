@@ -1854,10 +1854,13 @@ function bbMatch(bbName) {
   return loose.length === 1 ? loose[0].i : -1;
 }
 
-function applyBigBen(list) {
+function applyBigBen(rawList) {
   const changed = [], same = [], unknown = [], missed = [], money = [];
   const touched = new Set();
   if (!state.crmRev) state.crmRev = {};
+  // последний элемент — служебная метка месяца, не группа
+  const monTag = (rawList.find(x => x && x.mon && !x.n && !x.name) || {}).mon || '';
+  const list = rawList.filter(x => x && (x.n || x.name));
   list.forEach(item => {
     const name = item.n || item.name, pupils = +(item.p !== undefined ? item.p : item.pupils);
     const i = bbMatch(name);
@@ -1888,7 +1891,7 @@ function applyBigBen(list) {
       : '';
     box.innerHTML =
       '<div style="background:var(--purple-light);border-radius:12px;padding:12px 14px;margin-bottom:14px">' +
-      '<div style="font-size:13px;font-weight:700;color:var(--purple);margin-bottom:8px">Данные из BigBen · ' + list.length + ' групп</div>' +
+      '<div style="font-size:13px;font-weight:700;color:var(--purple);margin-bottom:8px">Данные из BigBen · ' + list.length + ' групп' + (monTag ? ' · выручка за ' + monthName(monTag) : '') + '</div>' +
       block('Выручка из CRM, со скидками', money, 'var(--purple)', money.length) +
       block('Изменилось', changed, 'var(--purple)', changed.length) +
       block('Без изменений', [same.join(', ')].filter(x => x), 'var(--gray-600)', same.length) +
@@ -1906,6 +1909,11 @@ function applyBigBenPaste() {
   catch (e) { alert('Не разобрал данные: ' + e.message); }
 }
 
+function monthName(ym) {
+  const M = ['январь','февраль','март','апрель','май','июнь','июль','август','сентябрь','октябрь','ноябрь','декабрь'];
+  const p = String(ym).split('-');
+  return M[+p[1] - 1] ? M[+p[1] - 1] + ' ' + p[0] : ym;
+}
 function useCrmRevenue() { return localStorage.getItem('ss_use_crm_rev') === '1'; }
 function toggleUseRev(on) {
   localStorage.setItem('ss_use_crm_rev', on ? '1' : '0');
