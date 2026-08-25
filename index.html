@@ -877,7 +877,7 @@
           Сервер сам зайдёт в BigBen и принесёт группы и выручку. Код доступа вводится один раз и запоминается на этом устройстве.
         </div>
         <div style="display:flex;gap:8px;flex-wrap:wrap">
-          <input id="bbToken" type="password" placeholder="код доступа" autocomplete="off" style="
+          <input id="bbToken" type="password" placeholder="код доступа" autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false" style="
             flex:1 1 150px;font-family:var(--font);font-size:13px;padding:9px 12px;
             border:1.5px solid var(--gray-200);border-radius:10px">
           <button id="bbServerBtn" onclick="bbServerRefresh()" style="
@@ -1968,6 +1968,9 @@ async function bbServerRefresh() {
   } catch (e) {
     msg.style.color = 'var(--red, #c00)';
     msg.textContent = 'Не вышло: ' + (e.message || e);
+    if (/код не совпал/.test(String(e.message || e))) {
+      msg.innerHTML += ' — <a href="' + BB_SERVER.replace('/data', '/check') + '?t=' + encodeURIComponent(token) + '" target="_blank" style="color:inherit">проверить код</a>';
+    }
   } finally {
     btn.disabled = false;
     btn.textContent = was;
