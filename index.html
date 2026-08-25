@@ -1959,7 +1959,18 @@ async function bbServerRefresh() {
   msg.style.color = 'var(--gray-600)';
   msg.textContent = 'Сервер заходит в BigBen, это 10–20 секунд…';
   try {
-    const r = await fetch(BB_SERVER + '?t=' + encodeURIComponent(token), { cache: 'no-store' });
+    const stop = new AbortController();
+    const timer = setTimeout(() => stop.abort(), 75000);
+    let r;
+    try {
+      r = await fetch(BB_SERVER + '?t=' + encodeURIComponent(token), { cache: 'no-store', signal: stop.signal });
+    } catch (err) {
+      throw new Error(stop.signal.aborted
+        ? 'сервер не ответил за 75 секунд — похоже, до него не пускает сеть. Включи VPN и попробуй снова'
+        : 'сеть не пустила запрос. Включи VPN и попробуй снова');
+    } finally {
+      clearTimeout(timer);
+    }
     const d = await r.json();
     if (!d.ok) throw new Error(d.error || 'сервер отказал');
     localStorage.setItem('bbToken', token);
