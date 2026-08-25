@@ -871,12 +871,29 @@
     </div>
     <div style="padding:18px 24px 24px">
       <div id="bbReport"></div>
+      <div style="background:var(--gray-50);border-radius:12px;padding:14px;margin:0 0 14px">
+        <div style="font-size:13px;font-weight:700;color:var(--gray-900)">С телефона — обновить с сервера</div>
+        <div style="font-size:12px;color:var(--gray-600);line-height:1.5;margin:4px 0 10px">
+          Сервер сам зайдёт в BigBen и принесёт группы и выручку. Код доступа вводится один раз и запоминается на этом устройстве.
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <input id="bbToken" type="password" placeholder="код доступа" autocomplete="off" style="
+            flex:1 1 150px;font-family:var(--font);font-size:13px;padding:9px 12px;
+            border:1.5px solid var(--gray-200);border-radius:10px">
+          <button id="bbServerBtn" onclick="bbServerRefresh()" style="
+            font-family:var(--font);font-size:13px;font-weight:700;padding:9px 16px;
+            border-radius:10px;border:none;background:var(--purple);color:#fff;cursor:pointer">Обновить</button>
+        </div>
+        <div id="bbServerMsg" style="font-size:12px;margin-top:8px;color:var(--gray-600)"></div>
+      </div>
       <label style="display:flex;gap:8px;align-items:flex-start;background:var(--gray-50);border-radius:10px;padding:10px 12px;margin:0 0 14px;cursor:pointer">
         <input type="checkbox" id="bbUseRev" onchange="toggleUseRev(this.checked)" style="margin-top:2px">
         <span style="font-size:12px;color:var(--gray-600);line-height:1.5">
           <b style="color:var(--gray-900)">Учитывать скидки из CRM</b> — выручка считается от ваших цен (8 000 и 10 000) с индивидуальной скидкой каждого ученика. Не зависит от того, 8 или 9 занятий в месяце.
         </span>
       </label>
+      <details style="font-size:12px;color:var(--gray-600);margin-bottom:10px">
+        <summary style="cursor:pointer">С компьютера — через закладку в браузере</summary>
       <ol style="font-size:13px;line-height:1.7;color:var(--gray-600);padding-left:18px;margin:0 0 14px">
         <li>Один раз: перетащи кнопку ниже на панель закладок браузера.</li>
         <li>Открой BigBen (админку) в соседней вкладке и войди, если попросит.</li>
@@ -899,6 +916,7 @@
           если перетащить не вышло: Закладки → Добавить закладку → Правка → вставить в адрес
         </span>
       </p>
+      </details>
       <details style="font-size:12px;color:var(--gray-600)">
         <summary style="cursor:pointer">Не получилось перетащить — вставить данные вручную</summary>
         <textarea id="bbPaste" placeholder="Сюда можно вставить JSON из закладки" style="
@@ -1926,6 +1944,36 @@ function applyBigBen(rawList) {
   return changed.length;
 }
 
+const BB_SERVER = 'https://ss-bb.o-sintsova.workers.dev/data';
+
+// Обновление без компьютера: воркер сам ходит в BigBen и приносит те же данные
+async function bbServerRefresh() {
+  const input = document.getElementById('bbToken');
+  const msg = document.getElementById('bbServerMsg');
+  const btn = document.getElementById('bbServerBtn');
+  const token = (input.value || '').trim();
+  if (!token) { msg.style.color = 'var(--red, #c00)'; msg.textContent = 'Введи код доступа'; input.focus(); return; }
+  btn.disabled = true;
+  const was = btn.textContent;
+  btn.textContent = 'Гружу…';
+  msg.style.color = 'var(--gray-600)';
+  msg.textContent = 'Сервер заходит в BigBen, это 10–20 секунд…';
+  try {
+    const r = await fetch(BB_SERVER + '?t=' + encodeURIComponent(token), { cache: 'no-store' });
+    const d = await r.json();
+    if (!d.ok) throw new Error(d.error || 'сервер отказал');
+    localStorage.setItem('bbToken', token);
+    msg.textContent = '';
+    applyBigBen(d.list);
+  } catch (e) {
+    msg.style.color = 'var(--red, #c00)';
+    msg.textContent = 'Не вышло: ' + (e.message || e);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = was;
+  }
+}
+
 function applyBigBenPaste() {
   const raw = (document.getElementById('bbPaste').value || '').trim();
   if (!raw) return;
@@ -1944,6 +1992,9 @@ function toggleUseRev(on) {
   if (!on) { state.crmRev = {}; localStorage.setItem('ss_salary_state', JSON.stringify(state)); render(); }
 }
 function openBigBenModal() {
+  const saved = localStorage.getItem('bbToken');
+  const f = document.getElementById('bbToken');
+  if (f && saved && !f.value) f.value = saved;
   document.getElementById('bigbenModal').classList.add('open');
   const cb = document.getElementById('bbUseRev');
   if (cb) cb.checked = useCrmRevenue();
