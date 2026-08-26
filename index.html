@@ -805,7 +805,7 @@
         <div style="flex:1">
           <div class="admin-name" style="font-size:14px">Налоги и взносы</div>
           <div class="admin-rule" id="taxRule">платежи этого месяца
-            &nbsp;<button onclick="openList('taxes')" style="font-size:10px;font-family:var(--font);border:1px solid var(--gray-200);background:none;border-radius:10px;padding:1px 7px;cursor:pointer;color:var(--gray-400)">✏️ список</button>
+            &nbsp;<button onclick="editMonthly('taxes')" style="font-size:10px;font-family:var(--font);border:1px solid var(--gray-200);background:none;border-radius:10px;padding:1px 7px;cursor:pointer;color:var(--gray-400)">✏️ сумма</button>
           </div>
           <div id="taxList" style="font-size:11px;color:var(--gray-400);margin-top:4px;line-height:1.6"></div>
         </div>
@@ -819,7 +819,7 @@
         <div style="flex:1">
           <div class="admin-name" style="font-size:14px">Прочие расходы школы</div>
           <div class="admin-rule">реклама, типография, хозтовары
-            &nbsp;<button onclick="openList('costs')" style="font-size:10px;font-family:var(--font);border:1px solid var(--gray-200);background:none;border-radius:10px;padding:1px 7px;cursor:pointer;color:var(--gray-400)">✏️ список</button>
+            &nbsp;<button onclick="editMonthly('costs')" style="font-size:10px;font-family:var(--font);border:1px solid var(--gray-200);background:none;border-radius:10px;padding:1px 7px;cursor:pointer;color:var(--gray-400)">✏️ сумма</button>
           </div>
           <div id="costList" style="font-size:11px;color:var(--gray-400);margin-top:4px;line-height:1.6"></div>
         </div>
@@ -833,7 +833,7 @@
         <div style="flex:1">
           <div class="admin-name" style="font-size:14px">Выплаты по кредиту</div>
           <div class="admin-rule">платежи по графику
-            &nbsp;<button onclick="openList('loans')" style="font-size:10px;font-family:var(--font);border:1px solid var(--gray-200);background:none;border-radius:10px;padding:1px 7px;cursor:pointer;color:var(--gray-400)">✏️ список</button>
+            &nbsp;<button onclick="editMonthly('loans')" style="font-size:10px;font-family:var(--font);border:1px solid var(--gray-200);background:none;border-radius:10px;padding:1px 7px;cursor:pointer;color:var(--gray-400)">✏️ сумма</button>
           </div>
           <div id="loanList" style="font-size:11px;color:var(--gray-400);margin-top:4px;line-height:1.6"></div>
         </div>
@@ -977,33 +977,6 @@
 </div>
 
 <div id="printArea" style="display:none"></div>
-
-<!-- TAX MODAL -->
-<div class="modal-overlay" id="taxModal" onclick="if(event.target===this)closeTaxes()">
-  <div class="modal" onclick="event.stopPropagation()" style="max-width:560px">
-    <div style="padding:24px 24px 0;display:flex;align-items:center;justify-content:space-between">
-      <div>
-        <div style="font-size:16px;font-weight:700" id="taxModalTitle">Налоги и взносы</div>
-        <div style="font-size:12px;color:var(--gray-400);margin-top:2px">Одна строка — один платёж</div>
-      </div>
-      <button onclick="closeTaxes()" style="background:none;border:none;font-size:20px;cursor:pointer;color:var(--gray-400)">✕</button>
-    </div>
-    <div style="padding:16px 24px 24px">
-      <div style="font-size:12px;color:var(--gray-600);line-height:1.6;margin-bottom:10px">
-        Одна строка — один платёж: <b>дата и сумма</b>, например <b>25.08.2026 67750</b>.
-        Если хочешь подписать, добавь назначение между ними: <b>25.08.2026 кредит 67750</b>.
-        Платёж попадёт в расходы того месяца, в котором стоит его дата.
-      </div>
-      <textarea id="taxText" spellcheck="false" style="width:100%;height:190px;font-family:var(--mono);font-size:12px;
-        border:1.5px solid var(--gray-200);border-radius:10px;padding:10px;line-height:1.7"></textarea>
-      <div id="taxHint" style="font-size:12px;color:var(--gray-400);margin-top:8px"></div>
-      <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px">
-        <button onclick="closeTaxes()" class="btn-action secondary">Отмена</button>
-        <button onclick="saveTaxes()" class="btn-action primary">Сохранить</button>
-      </div>
-    </div>
-  </div>
-</div>
 
 <!-- SLIP MODAL -->
 <div class="modal-overlay" id="slipModal" onclick="closeSlip(event)">
@@ -1174,133 +1147,54 @@ function saveCostState() { localStorage.setItem('ss_costs', JSON.stringify(costS
 let loanState = JSON.parse(localStorage.getItem('ss_loans') || 'null') || [];
 function saveLoanState() { localStorage.setItem('ss_loans', JSON.stringify(loanState)); }
 
+// Налоги, разовые расходы и кредит — просто сумма за каждый месяц: {taxes:{'2026-08':29093}}
+let monthlyState = JSON.parse(localStorage.getItem('ss_monthly') || 'null');
+if (!monthlyState) {
+  monthlyState = { taxes: {}, costs: {}, loans: {} };
+  // переносим то, что уже было введено списками
+  [['taxes', taxState], ['costs', costState], ['loans', loanState]].forEach(([kind, arr]) => {
+    (arr || []).forEach(t => {
+      const p = (t.d || '').split('.');
+      if (p.length !== 3) return;
+      const key = p[2] + '-' + p[1];
+      monthlyState[kind][key] = (monthlyState[kind][key] || 0) + (+t.s || 0);
+    });
+  });
+  localStorage.setItem('ss_monthly', JSON.stringify(monthlyState));
+}
+function saveMonthlyState() { localStorage.setItem('ss_monthly', JSON.stringify(monthlyState)); }
+function monthlyAmount(kind, ym) { return (monthlyState[kind] || {})[ym || picker.value] || 0; }
+
 // ---------- ДАТИРОВАННЫЕ ПЛАТЕЖИ: НАЛОГИ И ПРОЧИЕ РАСХОДЫ ----------
 // Каждый платёж привязан к дате оплаты: в расход месяца идёт то, что в этом месяце платится.
 
-const LISTS = {
-  taxes: {
-    get: () => taxState,
-    set: (v) => { taxState = v; saveTaxState(); },
-    title: 'Налоги и взносы',
-    valId: 'taxVal',
-    listId: 'taxList',
-  },
-  costs: {
-    get: () => costState,
-    set: (v) => { costState = v; saveCostState(); },
-    title: 'Прочие расходы школы',
-    valId: 'costVal',
-    listId: 'costList',
-  },
-  loans: {
-    get: () => loanState,
-    set: (v) => { loanState = v; saveLoanState(); },
-    title: 'Выплаты по кредиту',
-    valId: 'loanVal',
-    listId: 'loanList',
-  },
-};
+const KIND_TITLE = { taxes: 'Налоги и взносы', costs: 'Прочие расходы школы', loans: 'Выплаты по кредиту' };
+const KIND_IDS = { taxes: ['taxVal', 'taxList'], costs: ['costVal', 'costList'], loans: ['loanVal', 'loanList'] };
 
-let currentList = 'taxes';
-
-function itemsOfMonth(arr, ym) {
-  const [y, m] = (ym || picker.value).split('-');
-  return arr.filter(t => {
-    const p = (t.d || '').split('.');
-    return p.length === 3 && p[1] === m && p[2] === y;
-  });
-}
-
-const sumItems = (arr) => arr.reduce((sum, t) => sum + (+t.s || 0), 0);
-
-function openList(kind) {
-  currentList = kind;
-  const L = LISTS[kind];
-  document.getElementById('taxModalTitle').textContent = L.title;
-  document.getElementById('taxText').value = L.get().map(t => `${t.d} · ${t.n} · ${t.s}`).join('\n');
-  document.getElementById('taxHint').textContent =
-    'Сейчас в списке ' + L.get().length + ' платежей на ' + fmt(sumItems(L.get())) + ' за год.';
-  document.getElementById('taxModal').classList.add('open');
-}
-
-function closeTaxes() {
-  document.getElementById('taxModal').classList.remove('open');
-}
-
-function parseTaxLine(line, kind) {
-  // Понимаем и «31.08.2026 · назначение · 14400», и просто «25.08.2026 67750»
-  const parts = line.split(/[·;|\t]+/).map(x => x.trim()).filter(Boolean);
-  let date, name, sum;
-
-  if (parts.length >= 2) {
-    date = parts[0];
-    sum = parts[parts.length - 1];
-    name = parts.slice(1, -1).join(' · ');
-  } else {
-    const m = line.trim().match(/^(\S+)\s+(.*)$/);
-    if (!m) return null;
-    date = m[1];
-    const rest = m[2].trim();
-    const tail = rest.match(/([\d\s.,]+)$/);
-    if (!tail) return null;
-    sum = tail[1];
-    name = rest.slice(0, rest.length - tail[1].length).trim();
-  }
-
-  // дата: 25.08.2026 · 25.08.26 · 2026-08-25
-  const d1 = date.match(/^(\d{1,2})[.\/-](\d{1,2})[.\/-](\d{2,4})$/);
-  const d2 = date.match(/^(\d{4})-(\d{2})-(\d{2})$/);
-  let dd, mm, yy;
-  if (d1) { dd = d1[1]; mm = d1[2]; yy = d1[3]; }
-  else if (d2) { dd = d2[3]; mm = d2[2]; yy = d2[1]; }
-  else return null;
-  if (yy.length === 2) yy = '20' + yy;
-  dd = dd.padStart(2, '0'); mm = mm.padStart(2, '0');
-  if (+mm < 1 || +mm > 12 || +dd < 1 || +dd > 31) return null;
-
-  const n = parseFloat(String(sum).replace(/\s/g, '').replace(/[^\d.,-]/g, '').replace(',', '.'));
-  if (isNaN(n)) return null;
-
-  const defaults = { taxes: 'Налог или взнос', costs: 'Расход', loans: 'Платёж по кредиту' };
-  return { d: dd + '.' + mm + '.' + yy, n: name || defaults[kind] || 'Платёж', s: Math.round(n) };
-}
-
-function saveTaxes() {
-  const rows = document.getElementById('taxText').value.split('\n');
-  const parsed = [], bad = [];
-  rows.forEach(raw => {
-    const line = raw.trim();
-    if (!line) return;
-    const item = parseTaxLine(line, currentList);
-    if (item) parsed.push(item); else bad.push(line);
-  });
-  if (bad.length) {
-    document.getElementById('taxHint').innerHTML =
-      '<span style="color:#c00">Не разобрал строки — нужна дата и сумма, например «25.08.2026 67750»:</span><br>' +
-      bad.map(b => '• ' + b).join('<br>');
-    return;
-  }
-  LISTS[currentList].set(parsed);
-  closeTaxes();
+function editMonthly(kind) {
+  const [y, m] = picker.value.split('-');
+  const label = monthNames[parseInt(m) - 1] + ' ' + y;
+  const val = prompt(KIND_TITLE[kind] + '\nСумма за ' + label + ' (\u20BD):', monthlyAmount(kind) || '');
+  if (val === null) return;
+  const n = parseFloat(String(val).replace(/\s/g, '').replace(',', '.'));
+  if (isNaN(n) || n < 0) return;
+  monthlyState[kind] = monthlyState[kind] || {};
+  monthlyState[kind][picker.value] = Math.round(n);
+  saveMonthlyState();
   render();
 }
 
-function renderList(kind) {
-  const L = LISTS[kind];
-  const month = itemsOfMonth(L.get());
-  document.getElementById(L.valId).textContent = fmt(sumItems(month));
-  document.getElementById(L.listId).innerHTML = month.length
-    ? month.map(t => `${t.d} · ${t.n} — <b style="color:var(--gray-600)">${fmt(t.s)}</b>`).join('<br>')
-    : 'в этом месяце платежей нет · за год запланировано ' + fmt(sumItems(L.get()));
-  return sumItems(month);
+function renderMonthly(kind) {
+  const ids = KIND_IDS[kind];
+  document.getElementById(ids[0]).textContent = fmt(monthlyAmount(kind));
+  const year = Object.entries(monthlyState[kind] || {})
+    .filter(([k, v]) => k.slice(0, 4) === picker.value.slice(0, 4) && v)
+    .reduce((a, [, v]) => a + v, 0);
+  document.getElementById(ids[1]).textContent = year
+    ? 'за ' + picker.value.slice(0, 4) + ' год всего ' + fmt(year)
+    : 'сумма вводится за каждый месяц отдельно';
 }
 
-
-// раньше отработки считались одним полем в «единицах по 1500 ₽» — переносим в 60-минутные
-if (fixedState.otrabotki !== undefined) {
-  if (!fixedState.otrabotki60 && !fixedState.otrabotki90) fixedState.otrabotki60 = fixedState.otrabotki;
-  delete fixedState.otrabotki;
-}
 function saveFixedState() { localStorage.setItem('ss_fixed', JSON.stringify(fixedState)); }
 
 // ДАННЫЕ ГРУПП (актуальные на 2026-2027)
@@ -1394,9 +1288,9 @@ function render() {
   const adminPct = Math.round(totalRevenue * ADMIN_PCT);
   const adminPay = Math.max(adminPct, fixedState.adminMin);
   const otrabotkiPay = (fixedState.otrabotki60 || 0) * 1500 + (fixedState.otrabotki90 || 0) * 2250;
-  const taxPay = sumItems(itemsOfMonth(taxState));
-  const costPay = sumItems(itemsOfMonth(costState));
-  const loanPay = sumItems(itemsOfMonth(loanState));
+  const taxPay = monthlyAmount('taxes');
+  const costPay = monthlyAmount('costs');
+  const loanPay = monthlyAmount('loans');
   const fixedTotal = adminPay + fixedState.cleaning + fixedState.smm + fixedState.rent + otrabotkiPay + taxPay + costPay + loanPay;
   const totalAllPay = totalHands + fixedTotal;
 
@@ -1450,9 +1344,9 @@ function render() {
   document.getElementById('otrabotki60Count').value = fixedState.otrabotki60 || 0;
   document.getElementById('otrabotki90Count').value = fixedState.otrabotki90 || 0;
   document.getElementById('otrabotkiTotal').textContent = fmt(Math.round(otrabotkiPay));
-  renderList('taxes');
-  renderList('costs');
-  renderList('loans');
+  renderMonthly('taxes');
+  renderMonthly('costs');
+  renderMonthly('loans');
   document.getElementById('fixedTotal').textContent = fmt(fixedTotal);
 
   // Teacher blocks
