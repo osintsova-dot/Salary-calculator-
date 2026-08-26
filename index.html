@@ -683,12 +683,12 @@
     <div class="card">
       <div class="card-label">Остаток после выплат</div>
       <div class="card-value" id="totalRemainder">0 ₽</div>
-      <div class="card-sub" id="remainderSub">Выручка − все выплаты</div>
+      <div class="card-sub" id="remainderSub">Прибыль + моя ЗП</div>
     </div>
     <div class="card">
       <div class="card-label">Резерв 20%</div>
       <div class="card-value" id="reserveAmt">0 ₽</div>
-      <div class="card-sub" id="reserveSub">20% от остатка · на счёт</div>
+      <div class="card-sub" id="reserveSub">20% от прибыли · на счёт</div>
     </div>
     <div class="card">
       <div class="card-label">Потенциал (12 уч.)</div>
@@ -1327,24 +1327,37 @@ function render() {
   document.getElementById('adminNote').textContent = adminPct >= ADMIN_MIN
     ? '5% = ' + fmt(adminPct)
     : '5% = ' + fmt(adminPct) + ' → минимум';
-  const remainder = totalRevenue - totalAllPay;
+  const profit = totalRevenue - totalAllPay;
+  // Зарплата Оксаны — тоже её деньги, поэтому в «остатке» она возвращается обратно
+  const ownerName = 'Оксана Синцова';
+  let ownerHands = 0, ownerDeposit = 0;
+  GROUPS.forEach((g, i) => {
+    if (g.teacher !== ownerName) return;
+    const c = calcGroup(i);
+    ownerHands += c.hands;
+    ownerDeposit += c.deposit;
+  });
+  const remainder = profit + ownerHands;
   lastTotals = {
     pupils: totalPupils, revenue: totalRevenue, fot: totalFot, hands: totalHands,
     deposit: totalDeposit, admin: adminPay, taxes: taxPay, costs: costPay, loans: loanPay,
-    fixed: fixedTotal, all: totalAllPay, profit: remainder,
+    fixed: fixedTotal, all: totalAllPay, profit: profit,
+    ownerHands: ownerHands, mine: remainder,
   };
   document.getElementById('totalAllPay').textContent = fmt(totalAllPay);
   document.getElementById('totalAllSub').textContent = 'Педагоги ' + fmt(totalHands) + ' + фикс. ' + fmt(fixedTotal);
   document.getElementById('totalRemainder').textContent = fmt(remainder);
   document.getElementById('totalRemainder').style.color = remainder >= 0 ? 'var(--green)' : 'var(--red)';
-  document.getElementById('remainderSub').textContent = remainder >= 0 ? 'Прибыль месяца' : 'Дефицит';
-  const reserve = remainder > 0 ? Math.round(remainder * 0.2) : 0;
-  const afterReserve = remainder > 0 ? remainder - reserve : remainder;
+  document.getElementById('remainderSub').textContent = remainder >= 0
+    ? 'Прибыль ' + fmt(profit) + ' + моя ЗП ' + fmt(ownerHands)
+    : 'Дефицит';
+  const reserve = profit > 0 ? Math.round(profit * 0.2) : 0;
+  const afterReserve = profit > 0 ? profit - reserve : profit;
   document.getElementById('reserveAmt').textContent = fmt(reserve);
   document.getElementById('reserveAmt').style.color = reserve > 0 ? 'var(--purple)' : 'var(--gray-400)';
   document.getElementById('reserveSub').textContent = reserve > 0
-    ? '20% от ' + fmt(remainder) + ' · за 9 мес: ' + fmt(reserve * 9)
-    : 'Нет остатка для резерва';
+    ? '20% от прибыли ' + fmt(profit) + ' · за 9 мес: ' + fmt(reserve * 9)
+    : 'Нет прибыли для резерва';
   document.getElementById('potentialRevenue').textContent = fmt(totalPotential);
   document.getElementById('potentialDiff').textContent = '+' + fmt(totalPotential - totalRevenue) + ' к текущему';
 
