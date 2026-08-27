@@ -1274,7 +1274,10 @@ let creditsState = JSON.parse(localStorage.getItem('ss_credits') || 'null') || {
 function saveCreditsState() { localStorage.setItem('ss_credits', JSON.stringify(creditsState)); }
 // сколько платёжных месяцев от текущего до целевого (цель = месяц, в начале которого долг закрыт)
 function monthsToTarget() {
-  const [cy, cm] = picker.value.split('-').map(Number);
+  // считаем от СЕГОДНЯШНЕЙ даты, а не от месяца в шапке — иначе платёж
+  // по кредиту прыгал в зависимости от того, какой месяц листаешь
+  const now = new Date();
+  const cy = now.getFullYear(), cm = now.getMonth() + 1;
   const [ty, tm] = creditsState.target.split('-').map(Number);
   return Math.max(1, (ty * 12 + tm) - (cy * 12 + cm));
 }
