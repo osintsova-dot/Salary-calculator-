@@ -997,7 +997,7 @@
       <div style="background:var(--gray-50);border-radius:12px;padding:14px;margin:0 0 14px">
         <div style="font-size:13px;font-weight:700;color:var(--gray-900)">С телефона — обновить с сервера</div>
         <div style="font-size:12px;color:var(--gray-600);line-height:1.5;margin:4px 0 10px">
-          Сервер сам зайдёт в BigBen и принесёт группы и выручку. Код доступа вводится один раз и запоминается на этом устройстве.
+          Телефон читает последний снимок мгновенно (обновляется сам раз в сутки). Код доступа вводится один раз и запоминается.
         </div>
         <div style="display:flex;gap:8px;flex-wrap:wrap">
           <input id="bbToken" type="password" placeholder="код доступа" autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false" style="
@@ -2692,7 +2692,7 @@ async function bbServerRefresh() {
   const was = btn.textContent;
   btn.textContent = 'Гружу…';
   msg.style.color = 'var(--gray-600)';
-  msg.textContent = 'Сервер заходит в BigBen, это 10–20 секунд…';
+  msg.textContent = 'Читаю последний снимок…';
   try {
     const stop = new AbortController();
     const timer = setTimeout(() => stop.abort(), 150000);
@@ -2709,8 +2709,16 @@ async function bbServerRefresh() {
     const d = await r.json();
     if (!d.ok) throw new Error(d.error || 'сервер отказал');
     localStorage.setItem('bbToken', token);
-    msg.textContent = '';
     applyBigBen(d.list);
+    if (d.cached && d.at) {
+      const dt = new Date(d.at);
+      const when = isNaN(dt) ? '' : dt.toLocaleString('ru-RU', { day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' });
+      msg.style.color = 'var(--gray-600)';
+      msg.textContent = 'Готово — снимок от ' + when + '. Обновляется автоматически раз в сутки.';
+    } else {
+      msg.style.color = 'var(--gray-600)';
+      msg.textContent = 'Готово — свежие данные из BigBen.';
+    }
   } catch (e) {
     msg.style.color = 'var(--red, #c00)';
     msg.textContent = 'Не вышло: ' + (e.message || e);
