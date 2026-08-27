@@ -884,16 +884,28 @@
     </div>
   </div>
 
+  <!-- КОПИЛКИ -->
+  <div class="admin-block" style="flex-direction:column;gap:0;padding:0;overflow:hidden;margin-top:20px">
+    <div style="padding:14px 24px;background:var(--gray-50);border-bottom:1.5px solid var(--gray-100)">
+      <div style="font-size:13px;font-weight:700;color:var(--gray-900)">🏦 Копилки — автосписание в банке</div>
+      <div style="font-size:11px;color:var(--gray-400);margin-top:1px">Процент с каждого поступления. Рядом — обязательный минимум: если процент недобирает, доложи вручную.</div>
+    </div>
+    <div id="kopilkiRows"></div>
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 24px;background:var(--gray-50);border-top:2px solid var(--gray-200)">
+      <div style="font-size:13px;font-weight:600;color:var(--gray-600)">Всего в копилки</div>
+      <div class="admin-item-value" id="kopilkiTotal" style="font-size:18px;color:var(--gray-900)">0 ₽</div>
+    </div>
+  </div>
+
   <!-- SUMMER FUND -->
   <div class="admin-block" style="flex-direction:column;gap:0;padding:0;overflow:hidden;margin-top:20px">
     <div style="padding:14px 24px;background:#FFF6DC;border-bottom:1.5px solid #f0e2b5;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
       <div>
         <div style="font-size:13px;font-weight:700;color:var(--gray-900)">☀️ Фонд Лета</div>
-        <div style="font-size:11px;color:var(--gray-500);margin-top:1px">Копится в учебные месяцы на июнь–август: кредит, билеты, жизнь. Депозит 20% не трогаем.</div>
+        <div style="font-size:11px;color:var(--gray-500);margin-top:1px">Годовая цель и накопление по месяцам. Ежемесячный взнос — в блоке «Копилки» выше.</div>
       </div>
       <div style="display:flex;gap:6px">
         <button onclick="editSummerTarget()" style="font-size:11px;font-family:var(--font);border:1px solid var(--gray-200);background:#fff;border-radius:10px;padding:4px 10px;cursor:pointer;color:var(--gray-600)">🎯 цель</button>
-        <button onclick="editSummerMonthly()" style="font-size:11px;font-family:var(--font);border:1px solid var(--gray-200);background:#fff;border-radius:10px;padding:4px 10px;cursor:pointer;color:var(--gray-600)">✏️ план/мес</button>
       </div>
     </div>
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:0">
@@ -1232,6 +1244,9 @@ function saveMonthlyState() { localStorage.setItem('ss_monthly', JSON.stringify(
 // --- Фонд Лета: копим в учебные месяцы на июнь-август (кредит, билеты, жизнь) ---
 // Цель по умолчанию 1 800 000 (200к × 9 мес): кредит 510к + билеты 500к + жизнь 600к + запас.
 let summerState = JSON.parse(localStorage.getItem('ss_summer') || 'null') || { target: 1800000, monthly: 200000, saved: {} };
+if (summerState.vacationPct == null) summerState.vacationPct = 5;   // отпускные учителям, % с поступлений
+if (summerState.depositPct  == null) summerState.depositPct  = 10;  // депозит-резерв, % с поступлений
+if (summerState.summerPct   == null) summerState.summerPct   = 15;  // фонд лета, % с поступлений
 function saveSummerState() { localStorage.setItem('ss_summer', JSON.stringify(summerState)); }
 function summerSavedTotal() { return Object.values(summerState.saved || {}).reduce((a, b) => a + (+b || 0), 0); }
 function summerThisMonth() { return (summerState.saved || {})[picker.value] || 0; }
@@ -1247,6 +1262,15 @@ function editSummerMonthly() {
   const n = parseInt(String(v).replace(/[^0-9]/g, ''), 10);
   if (n > 0) { summerState.monthly = n; saveSummerState(); render(); }
 }
+function editPct(field, title) {
+  const v = prompt(title + ' — процент с поступлений, %:', summerState[field]);
+  if (v === null) return;
+  const n = parseFloat(String(v).replace(',', '.').replace(/[^0-9.]/g, ''));
+  if (!isNaN(n) && n >= 0) { summerState[field] = n; saveSummerState(); render(); }
+}
+function editVacationPct() { editPct('vacationPct', 'Отпускные учителям'); }
+function editDepositPct()  { editPct('depositPct', 'Депозит / резерв'); }
+function editSummerPct()   { editPct('summerPct', 'Фонд Лета'); }
 function editSummerSaved() {
   const [y, m] = picker.value.split('-');
   const label = monthNames[parseInt(m) - 1] + ' ' + y;
@@ -1424,19 +1448,49 @@ function render() {
   document.getElementById('remainderSub').textContent = remainder >= 0
     ? 'Прибыль ' + fmt(profit) + ' + моя ЗП ' + fmt(ownerHands)
     : 'Дефицит';
-  const reserve = profit > 0 ? Math.round(profit * 0.2) : 0;
-  const afterReserve = profit > 0 ? profit - reserve : profit;
-  document.getElementById('reserveAmt').textContent = fmt(reserve);
-  document.getElementById('reserveAmt').style.color = reserve > 0 ? 'var(--purple)' : 'var(--gray-400)';
-  document.getElementById('reserveSub').textContent = reserve > 0
-    ? '20% от прибыли ' + fmt(profit) + ' · за 9 мес: ' + fmt(reserve * 9)
-    : 'Нет прибыли для резерва';
+  // ===== КОПИЛКИ: процент с поступлений + обязательный минимум =====
+  const vacPct = summerState.vacationPct, depPct = summerState.depositPct, sumPct = summerState.summerPct;
+  const vacMin = totalDeposit;                                   // отпускные: 2500 × число групп — обязательно
+  const vacPlan = Math.round(totalRevenue * vacPct / 100);
+  const vacActual = Math.max(vacPlan, vacMin);
+  const depMin = profit > 0 ? Math.round(profit * 0.2) : 0;      // депозит: рекомендуемо от 20% прибыли
+  const depPlan = Math.round(totalRevenue * depPct / 100);
+  const sumMin = Math.round((summerState.target || 0) / 9);      // лето: цель ÷ 9 мес — обязательно
+  const sumPlan = Math.round(totalRevenue * sumPct / 100);
+  const sumActual = Math.max(sumPlan, sumMin);
 
-  // --- Фонд Лета ---
-  const summerPlan = summerState.monthly || 0;
+  const kop = [
+    { icon: '🏖', name: 'Отпускные учителям', pct: vacPct, plan: vacPlan, min: vacMin, editFn: 'editVacationPct', minNote: '2 500 ₽ × ' + GROUPS.length + ' групп', hard: true },
+    { icon: '🏦', name: 'Депозит / резерв',   pct: depPct, plan: depPlan, min: depMin, editFn: 'editDepositPct',  minNote: 'реком. 20% прибыли', hard: false },
+    { icon: '☀️', name: 'Фонд Лета',          pct: sumPct, plan: sumPlan, min: sumMin, editFn: 'editSummerPct',   minNote: 'цель ÷ 9 мес', hard: true },
+  ];
+  document.getElementById('kopilkiRows').innerHTML = kop.map(function (k) {
+    const diff = k.plan - k.min;
+    const status = k.min <= 0 ? '<span style="color:var(--gray-400)">без минимума</span>'
+      : diff >= 0 ? '<span style="color:var(--green)">✓ хватает, сверху +' + fmt(diff) + '</span>'
+                  : '<span style="color:var(--red)">⚠️ мало, доложи ' + fmt(-diff) + '</span>';
+    return '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:11px 24px;border-bottom:1px solid var(--gray-100);flex-wrap:wrap">'
+      + '<div style="min-width:160px"><div style="font-size:13px;font-weight:600;color:var(--gray-900)">' + k.icon + ' ' + k.name + '</div>'
+      + '<div style="font-size:11px;color:var(--gray-400)">минимум ' + fmt(k.min) + ' · ' + k.minNote + '</div></div>'
+      + '<div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">'
+      + '<button onclick="' + k.editFn + '()" style="font-family:var(--mono);font-size:14px;font-weight:700;color:var(--purple);border:1px solid var(--gray-200);background:#fff;border-radius:10px;padding:3px 10px;cursor:pointer">' + k.pct + '% ✏️</button>'
+      + '<div style="font-family:var(--mono);font-size:15px;font-weight:700;color:var(--gray-900);min-width:100px;text-align:right">' + fmt(k.plan) + '</div>'
+      + '<div style="font-size:12px;min-width:150px;text-align:right">' + status + '</div></div></div>';
+  }).join('');
+  const kopSumPct = Math.round((vacPct + depPct + sumPct) * 10) / 10;
+  document.getElementById('kopilkiTotal').textContent = fmt(vacPlan + depPlan + sumPlan) + '  ·  ' + kopSumPct + '% с поступлений';
+
+  // карточка «Резерв» показывает депозит-копилку
+  document.getElementById('reserveAmt').textContent = fmt(depPlan);
+  document.getElementById('reserveAmt').style.color = depPlan > 0 ? 'var(--purple)' : 'var(--gray-400)';
+  document.getElementById('reserveSub').textContent = depPct + '% с поступлений · за 9 мес: ' + fmt(depPlan * 9);
+
+  // --- Фонд Лета (годовой трекер) ---
+  const summerPlan = sumPlan;
   const summerSaved = summerSavedTotal();
   const summerLeft = Math.max(0, (summerState.target || 0) - summerSaved);
   document.getElementById('summerMonthlyCard').textContent = fmt(summerPlan);
+  document.getElementById('summerCardSub').textContent = sumPct + '% с поступлений';
   document.getElementById('summerTarget').textContent = fmt(summerState.target || 0);
   document.getElementById('summerSaved').textContent = fmt(summerSaved);
   document.getElementById('summerLeft').textContent = fmt(summerLeft);
@@ -1460,12 +1514,12 @@ function render() {
   }
 
   // Свободно на руки = остаток − резерв 20% − плановый взнос в Фонд Лета
-  const freeCash = remainder - reserve - summerPlan;
+  const freeCash = remainder - vacActual - depPlan - sumActual;
   document.getElementById('freeAmt').textContent = fmt(freeCash);
   document.getElementById('freeAmt').style.color = freeCash >= 0 ? 'var(--green)' : 'var(--red)';
   document.getElementById('freeSub').textContent = freeCash >= 0
-    ? 'после депозита и фонда лета'
-    : 'не хватает на депозит + лето';
+    ? 'после всех трёх копилок'
+    : 'не хватает на копилки';
   document.getElementById('potentialRevenue').textContent = fmt(totalPotential);
   document.getElementById('potentialDiff').textContent = '+' + fmt(totalPotential - totalRevenue) + ' к текущему';
 
