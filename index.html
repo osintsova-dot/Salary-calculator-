@@ -917,7 +917,7 @@
     <div style="padding:14px 24px;background:#FFF6DC;border-bottom:1.5px solid #f0e2b5;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
       <div>
         <div style="font-size:13px;font-weight:700;color:var(--gray-900)">☀️ Фонд Лета</div>
-        <div style="font-size:11px;color:var(--gray-500);margin-top:1px">Копится на июнь–август: билеты и жизнь (кредитов летом уже не будет).</div>
+        <div style="font-size:11px;color:var(--gray-500);margin-top:1px">Копится на июнь–август: билеты и жизнь (кредиты закрыты к маю).</div>
       </div>
       <div style="display:flex;gap:6px">
         <button onclick="editSummerTarget()" style="font-size:11px;font-family:var(--font);border:1px solid var(--gray-200);background:#fff;border-radius:10px;padding:4px 10px;cursor:pointer;color:var(--gray-600)">🎯 цель</button>
@@ -1268,7 +1268,7 @@ let creditsState = JSON.parse(localStorage.getItem('ss_credits') || 'null') || {
   target: '2027-06',
   list: [
     { name: 'Кредит наличными', balance: 1432250, rate: 34.9, payment: 67750,  type: 'annuity' },
-    { name: 'Кредитная линия',  balance: 820000,  payment: 107580, type: 'line', commission: 28405 },
+    { name: 'Кредитная линия',  balance: 849990,  payment: 107580, type: 'line', commission: 28405 },
   ],
 };
 function saveCreditsState() { localStorage.setItem('ss_credits', JSON.stringify(creditsState)); }
@@ -1462,10 +1462,12 @@ function render() {
   // Кредиты: платёж = целевой аннуитет, чтобы закрыть к дате
   const creditN = monthsToTarget();
   const creditRows = creditsState.list.map(function (c) {
+    if (c.noEarly) {
+      // досрочно погасить нельзя — платим строго по графику
+      return { c: c, target: c.payment, extra: 0, locked: true };
+    }
     let need;
     if (c.type === 'line') {
-      // кредитная линия: комиссия фиксированная каждый месяц, поэтому не аннуитет —
-      // гасим тело за N месяцев + платим комиссию, пока линия открыта
       need = Math.round(c.balance / creditN) + (c.commission || 0);
     } else {
       need = annuity(c.balance, c.rate, creditN);
@@ -1485,8 +1487,8 @@ function render() {
           ? 'комиссия <button onclick="editCredit(' + i + ',\'commission\')" style="border:none;background:none;color:var(--purple);cursor:pointer;font-family:var(--mono);padding:0">' + fmt(r.c.commission) + '/мес</button>'
           : '<button onclick="editCredit(' + i + ',\'rate\')" style="border:none;background:none;color:var(--purple);cursor:pointer;padding:0">' + r.c.rate + '%</button>')
       + ' · график <button onclick="editCredit(' + i + ',\'payment\')" style="border:none;background:none;color:var(--gray-500);cursor:pointer;font-family:var(--mono);padding:0">' + fmt(r.c.payment) + '</button></div></div>'
-      + '<div style="text-align:right"><div style="font-family:var(--mono);font-size:15px;font-weight:700;color:' + (r.extra > 0 ? 'var(--red)' : 'var(--green)') + '">' + fmt(r.target) + '/мес</div>'
-      + '<div style="font-size:11px;color:var(--gray-400)">' + (r.extra > 0 ? '+' + fmt(r.extra) + ' сверх графика' : 'закроется по графику к сроку') + '</div></div></div>';
+      + '<div style="text-align:right"><div style="font-family:var(--mono);font-size:15px;font-weight:700;color:' + (r.extra > 0 ? 'var(--red)' : 'var(--gray-500)') + '">' + fmt(r.target) + '/мес</div>'
+      + '<div style="font-size:11px;color:var(--gray-400)">' + (r.locked ? 'по графику · досрочно нельзя' : (r.extra > 0 ? '+' + fmt(r.extra) + ' сверх графика' : 'закроется по графику к сроку')) + '</div></div></div>';
   }).join('');
   const creditExtra = creditRows.reduce(function (a, r) { return a + r.extra; }, 0);
   const tgtParts = creditsState.target.split('-');
