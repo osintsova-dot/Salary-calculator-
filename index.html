@@ -889,7 +889,10 @@
         <div style="font-size:13px;font-weight:700;color:var(--gray-900)">🏦 Кредиты — закрыть досрочно</div>
         <div style="font-size:11px;color:var(--gray-500);margin-top:1px">Целевой платёж, чтобы закрыть к сроку. Пока висят под 35–43%, гасить выгоднее, чем копить депозит.</div>
       </div>
-      <button onclick="editCreditTarget()" style="font-size:11px;font-family:var(--font);border:1px solid var(--gray-200);background:#fff;border-radius:10px;padding:4px 10px;cursor:pointer;color:var(--gray-600)">📅 срок</button>
+<div style="display:flex;gap:6px">
+        <button onclick="editCreditStart()" style="font-size:11px;font-family:var(--font);border:1px solid var(--gray-200);background:#fff;border-radius:10px;padding:4px 10px;cursor:pointer;color:var(--gray-600)">▶ первый взнос</button>
+        <button onclick="editCreditTarget()" style="font-size:11px;font-family:var(--font);border:1px solid var(--gray-200);background:#fff;border-radius:10px;padding:4px 10px;cursor:pointer;color:var(--gray-600)">📅 закрыть к</button>
+      </div>
     </div>
     <div id="creditRows"></div>
     <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 24px;background:#ffecec;border-top:2px solid #f3c9c9">
@@ -1265,21 +1268,22 @@ function saveSummerState() { localStorage.setItem('ss_summer', JSON.stringify(su
 
 // --- Кредиты: цель — закрыть к дате (по умолчанию 01.06.2027) ---
 let creditsState = JSON.parse(localStorage.getItem('ss_credits') || 'null') || {
+  start: '2026-09',
   target: '2027-06',
   list: [
     { name: 'Кредит наличными', balance: 1432250, rate: 34.9, payment: 67750,  type: 'annuity' },
     { name: 'Кредитная линия',  balance: 849990,  payment: 107580, type: 'line', commission: 28405 },
   ],
 };
+if (!creditsState.start) creditsState.start = '2026-09';
 function saveCreditsState() { localStorage.setItem('ss_credits', JSON.stringify(creditsState)); }
 // сколько платёжных месяцев от текущего до целевого (цель = месяц, в начале которого долг закрыт)
 function monthsToTarget() {
-  // считаем от СЕГОДНЯШНЕЙ даты, а не от месяца в шапке — иначе платёж
-  // по кредиту прыгал в зависимости от того, какой месяц листаешь
-  const now = new Date();
-  const cy = now.getFullYear(), cm = now.getMonth() + 1;
+  // число взносов = от месяца первого взноса до целевого месяца.
+  // Первый взнос в сентябре (после планового 25.09), последний в мае = 9.
+  const [sy, sm] = (creditsState.start || '2026-09').split('-').map(Number);
   const [ty, tm] = creditsState.target.split('-').map(Number);
-  return Math.max(1, (ty * 12 + tm) - (cy * 12 + cm));
+  return Math.max(1, (ty * 12 + tm) - (sy * 12 + sm));
 }
 // аннуитетный платёж, чтобы погасить P за n месяцев при годовой ставке rate%
 function annuity(P, ratePct, n) {
@@ -1292,6 +1296,11 @@ function editCreditTarget() {
   const v = prompt('Закрыть кредиты к какому месяцу? (формат ГГГГ-ММ, напр. 2027-06):', creditsState.target);
   if (v === null) return;
   if (/^\d{4}-\d{2}$/.test(v.trim())) { creditsState.target = v.trim(); saveCreditsState(); render(); }
+}
+function editCreditStart() {
+  const v = prompt('С какого месяца первый досрочный взнос? (ГГГГ-ММ, напр. 2026-09):', creditsState.start || '2026-09');
+  if (v === null) return;
+  if (/^\d{4}-\d{2}$/.test(v.trim())) { creditsState.start = v.trim(); saveCreditsState(); render(); }
 }
 function editCredit(i, field) {
   const c = creditsState.list[i];
@@ -1498,8 +1507,10 @@ function render() {
   document.getElementById('creditTotalLabel').textContent = 'Итого на кредиты, чтобы закрыть к ' + tgtParts[1] + '.' + tgtParts[0];
   document.getElementById('creditTotal').textContent = fmt(loanPay) + '/мес';
   const creditGraph = creditsState.list.reduce(function (a, c) { return a + c.payment; }, 0);
+  const stParts = (creditsState.start || '2026-09').split('-');
   document.getElementById('creditNote').textContent =
-    'По графику сейчас ' + fmt(creditGraph) + '/мес. Сверх графика нужно +' + fmt(creditExtra) + '/мес — зато с ' + tgtParts[1] + '.' + tgtParts[0] + ' кредитов нет, освобождается ' + fmt(creditGraph) + '/мес.';
+    creditN + ' взносов начиная с ' + stParts[1] + '.' + stParts[0] +
+    '. По графику ' + fmt(creditGraph) + '/мес, сверх графика +' + fmt(creditExtra) + '/мес. С ' + tgtParts[1] + '.' + tgtParts[0] + ' кредитов нет — освобождается ' + fmt(creditGraph) + '/мес навсегда.';
   const fixedTotal = adminPay + fixedState.cleaning + fixedState.smm + fixedState.rent + otrabotkiPay + taxPay + costPay + loanPay + totalDeposit;
   const totalAllPay = totalHands + fixedTotal;
 
