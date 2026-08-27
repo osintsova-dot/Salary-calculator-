@@ -902,8 +902,8 @@
   <!-- КОПИЛКИ -->
   <div class="admin-block" style="flex-direction:column;gap:0;padding:0;overflow:hidden;margin-top:20px">
     <div style="padding:14px 24px;background:var(--gray-50);border-bottom:1.5px solid var(--gray-100)">
-      <div style="font-size:13px;font-weight:700;color:var(--gray-900)">🏦 Копилки — автосписание в банке</div>
-      <div style="font-size:11px;color:var(--gray-400);margin-top:1px">Процент с каждого поступления. Рядом — обязательный минимум: если процент недобирает, доложи вручную.</div>
+      <div style="font-size:13px;font-weight:700;color:var(--gray-900)">☀️ Копилка на лето — автосписание в банке</div>
+      <div style="font-size:11px;color:var(--gray-400);margin-top:1px">Отпускные педагогам теперь в фиксированных выплатах. Здесь — только фонд лета.</div>
     </div>
     <div id="kopilkiRows"></div>
     <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 24px;background:var(--gray-50);border-top:2px solid var(--gray-200)">
@@ -1267,8 +1267,8 @@ function saveSummerState() { localStorage.setItem('ss_summer', JSON.stringify(su
 let creditsState = JSON.parse(localStorage.getItem('ss_credits') || 'null') || {
   target: '2027-06',
   list: [
-    { name: 'Кредит наличными', balance: 1432250, rate: 34.9, payment: 67750 },
-    { name: 'Кредитная линия',  balance: 820000,  rate: 43.0, payment: 107580 },
+    { name: 'Кредит наличными', balance: 1432250, rate: 34.9, payment: 67750,  type: 'annuity' },
+    { name: 'Кредитная линия',  balance: 820000,  payment: 107580, type: 'line', commission: 28405 },
   ],
 };
 function saveCreditsState() { localStorage.setItem('ss_credits', JSON.stringify(creditsState)); }
@@ -1292,7 +1292,7 @@ function editCreditTarget() {
 }
 function editCredit(i, field) {
   const c = creditsState.list[i];
-  const titles = { balance: 'Остаток долга (₽)', rate: 'Ставка, % годовых', payment: 'Платёж по графику (₽)' };
+  const titles = { balance: 'Остаток долга (₽)', rate: 'Ставка, % годовых', payment: 'Платёж по графику (₽)', commission: 'Комиссия в месяц (₽)' };
   const v = prompt(c.name + '\n' + titles[field] + ':', c[field]);
   if (v === null) return;
   const n = parseFloat(String(v).replace(',', '.').replace(/[^0-9.]/g, ''));
@@ -1462,8 +1462,16 @@ function render() {
   // Кредиты: платёж = целевой аннуитет, чтобы закрыть к дате
   const creditN = monthsToTarget();
   const creditRows = creditsState.list.map(function (c) {
-    const target = annuity(c.balance, c.rate, creditN);
-    return { c: c, target: target, extra: Math.max(0, target - c.payment) };
+    let need;
+    if (c.type === 'line') {
+      // кредитная линия: комиссия фиксированная каждый месяц, поэтому не аннуитет —
+      // гасим тело за N месяцев + платим комиссию, пока линия открыта
+      need = Math.round(c.balance / creditN) + (c.commission || 0);
+    } else {
+      need = annuity(c.balance, c.rate, creditN);
+    }
+    const target = Math.max(need, c.payment);
+    return { c: c, target: target, extra: target - c.payment };
   });
   const loanPay = creditRows.reduce(function (a, r) { return a + r.target; }, 0);
 
@@ -1473,10 +1481,12 @@ function render() {
       + '<div style="min-width:170px"><div style="font-size:13px;font-weight:600;color:var(--gray-900)">' + r.c.name + '</div>'
       + '<div style="font-size:11px;color:var(--gray-400)">'
       + 'остаток <button onclick="editCredit(' + i + ',\'balance\')" style="border:none;background:none;color:var(--purple);cursor:pointer;font-family:var(--mono);padding:0">' + fmt(r.c.balance) + '</button>'
-      + ' · <button onclick="editCredit(' + i + ',\'rate\')" style="border:none;background:none;color:var(--purple);cursor:pointer;padding:0">' + r.c.rate + '%</button>'
+      + ' · ' + (r.c.type === 'line'
+          ? 'комиссия <button onclick="editCredit(' + i + ',\'commission\')" style="border:none;background:none;color:var(--purple);cursor:pointer;font-family:var(--mono);padding:0">' + fmt(r.c.commission) + '/мес</button>'
+          : '<button onclick="editCredit(' + i + ',\'rate\')" style="border:none;background:none;color:var(--purple);cursor:pointer;padding:0">' + r.c.rate + '%</button>')
       + ' · график <button onclick="editCredit(' + i + ',\'payment\')" style="border:none;background:none;color:var(--gray-500);cursor:pointer;font-family:var(--mono);padding:0">' + fmt(r.c.payment) + '</button></div></div>'
-      + '<div style="text-align:right"><div style="font-family:var(--mono);font-size:15px;font-weight:700;color:var(--red)">' + fmt(r.target) + '/мес</div>'
-      + '<div style="font-size:11px;color:var(--gray-400)">+' + fmt(r.extra) + ' сверх графика</div></div></div>';
+      + '<div style="text-align:right"><div style="font-family:var(--mono);font-size:15px;font-weight:700;color:' + (r.extra > 0 ? 'var(--red)' : 'var(--green)') + '">' + fmt(r.target) + '/мес</div>'
+      + '<div style="font-size:11px;color:var(--gray-400)">' + (r.extra > 0 ? '+' + fmt(r.extra) + ' сверх графика' : 'закроется по графику к сроку') + '</div></div></div>';
   }).join('');
   const creditExtra = creditRows.reduce(function (a, r) { return a + r.extra; }, 0);
   const tgtParts = creditsState.target.split('-');
@@ -1485,7 +1495,7 @@ function render() {
   const creditGraph = creditsState.list.reduce(function (a, c) { return a + c.payment; }, 0);
   document.getElementById('creditNote').textContent =
     'По графику сейчас ' + fmt(creditGraph) + '/мес. Сверх графика нужно +' + fmt(creditExtra) + '/мес — зато с ' + tgtParts[1] + '.' + tgtParts[0] + ' кредитов нет, освобождается ' + fmt(creditGraph) + '/мес.';
-  const fixedTotal = adminPay + fixedState.cleaning + fixedState.smm + fixedState.rent + otrabotkiPay + taxPay + costPay + loanPay;
+  const fixedTotal = adminPay + fixedState.cleaning + fixedState.smm + fixedState.rent + otrabotkiPay + taxPay + costPay + loanPay + totalDeposit;
   const totalAllPay = totalHands + fixedTotal;
 
   // Summary cards
@@ -1517,24 +1527,20 @@ function render() {
     ownerHands: ownerHands, mine: remainder,
   };
   document.getElementById('totalAllPay').textContent = fmt(totalAllPay);
-  document.getElementById('totalAllSub').textContent = 'Педагоги ' + fmt(totalHands) + ' + фикс. ' + fmt(fixedTotal);
+  document.getElementById('totalAllSub').textContent = 'Педагоги ' + fmt(totalHands + totalDeposit) + ' (вкл. отпускные) + фикс. ' + fmt(fixedTotal - totalDeposit);
   document.getElementById('totalRemainder').textContent = fmt(remainder);
   document.getElementById('totalRemainder').style.color = remainder >= 0 ? 'var(--green)' : 'var(--red)';
   document.getElementById('remainderSub').textContent = remainder >= 0
     ? 'Прибыль ' + fmt(profit) + ' + моя ЗП ' + fmt(ownerHands)
     : 'Дефицит';
-  // ===== КОПИЛКИ: процент с поступлений + обязательный минимум =====
-  const vacPct = summerState.vacationPct, sumPct = summerState.summerPct;
-  const vacMin = totalDeposit;                                   // отпускные: 2500 × число групп — обязательно
-  const vacPlan = Math.round(totalRevenue * vacPct / 100);
-  const vacActual = Math.max(vacPlan, vacMin);
+  // ===== КОПИЛКА ЛЕТА: процент с поступлений + минимум =====
+  const sumPct = summerState.summerPct;
   const sumMin = Math.round((summerState.target || 0) / monthsToTarget()); // лето: цель ÷ месяцы до срока
   const sumPlan = Math.round(totalRevenue * sumPct / 100);
   const sumActual = Math.max(sumPlan, sumMin);
 
   const kop = [
-    { icon: '🏖', name: 'Отпускные учителям', pct: vacPct, plan: vacPlan, min: vacMin, editFn: 'editVacationPct', minNote: '2 500 ₽ × ' + GROUPS.length + ' групп', hard: true },
-    { icon: '☀️', name: 'Фонд Лета',          pct: sumPct, plan: sumPlan, min: sumMin, editFn: 'editSummerPct',   minNote: 'цель ÷ ' + monthsToTarget() + ' мес', hard: true },
+    { icon: '☀️', name: 'Фонд Лета', pct: sumPct, plan: sumPlan, min: sumMin, editFn: 'editSummerPct', minNote: 'цель ÷ ' + monthsToTarget() + ' мес', hard: true },
   ];
   document.getElementById('kopilkiRows').innerHTML = kop.map(function (k) {
     const diff = k.plan - k.min;
@@ -1549,8 +1555,7 @@ function render() {
       + '<div style="font-family:var(--mono);font-size:15px;font-weight:700;color:var(--gray-900);min-width:100px;text-align:right">' + fmt(k.plan) + '</div>'
       + '<div style="font-size:12px;min-width:150px;text-align:right">' + status + '</div></div></div>';
   }).join('');
-  const kopSumPct = Math.round((vacPct + sumPct) * 10) / 10;
-  document.getElementById('kopilkiTotal').textContent = fmt(vacPlan + sumPlan) + '  ·  ' + kopSumPct + '% с поступлений';
+  document.getElementById('kopilkiTotal').textContent = fmt(sumPlan) + '  ·  ' + sumPct + '% с поступлений';
 
   // карточка → «Кредиты / мес» (целевой платёж, чтобы закрыть к дате)
   document.getElementById('reserveLabel').textContent = '🏦 Кредиты / мес';
@@ -1588,11 +1593,11 @@ function render() {
   }
 
   // Свободно на руки = остаток − резерв 20% − плановый взнос в Фонд Лета
-  const freeCash = remainder - vacActual - sumActual;
+  const freeCash = remainder - sumActual;
   document.getElementById('freeAmt').textContent = fmt(freeCash);
   document.getElementById('freeAmt').style.color = freeCash >= 0 ? 'var(--green)' : 'var(--red)';
   document.getElementById('freeSub').textContent = freeCash >= 0
-    ? 'после кредитов и копилок'
+    ? 'после кредитов и фонда лета'
     : 'не хватает — сдвинь срок';
   document.getElementById('potentialRevenue').textContent = fmt(totalPotential);
   document.getElementById('potentialDiff').textContent = '+' + fmt(totalPotential - totalRevenue) + ' к текущему';
