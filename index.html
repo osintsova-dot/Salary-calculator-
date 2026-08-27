@@ -2695,13 +2695,13 @@ async function bbServerRefresh() {
   msg.textContent = 'Сервер заходит в BigBen, это 10–20 секунд…';
   try {
     const stop = new AbortController();
-    const timer = setTimeout(() => stop.abort(), 75000);
+    const timer = setTimeout(() => stop.abort(), 150000);
     let r;
     try {
       r = await fetch(BB_SERVER + '?t=' + encodeURIComponent(token), { cache: 'no-store', signal: stop.signal });
     } catch (err) {
       throw new Error(stop.signal.aborted
-        ? 'сервер не ответил за 75 секунд — похоже, до него не пускает сеть. Включи VPN и попробуй снова'
+        ? 'сервер не ответил за 2,5 минуты — похоже, мобильная сеть режет Cloudflare. Попробуй ещё раз, или обнови с компьютера через закладку'
         : 'сеть не пустила запрос. Включи VPN и попробуй снова');
     } finally {
       clearTimeout(timer);
