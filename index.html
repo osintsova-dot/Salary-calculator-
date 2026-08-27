@@ -691,6 +691,16 @@
       <div class="card-sub" id="reserveSub">20% от прибыли · на счёт</div>
     </div>
     <div class="card">
+      <div class="card-label">☀️ Фонд Лета / мес</div>
+      <div class="card-value" id="summerMonthlyCard">0 ₽</div>
+      <div class="card-sub" id="summerCardSub">откладывать на лето</div>
+    </div>
+    <div class="card">
+      <div class="card-label">Свободно на руки</div>
+      <div class="card-value" id="freeAmt">0 ₽</div>
+      <div class="card-sub" id="freeSub">остаток − резерв − лето</div>
+    </div>
+    <div class="card">
       <div class="card-label">Потенциал (12 уч.)</div>
       <div class="card-value" id="potentialRevenue">0 ₽</div>
       <div class="card-sub" id="potentialDiff">+0 ₽ к текущему</div>
@@ -872,6 +882,39 @@
       <div class="deposit-item-label">Накоплено за год</div>
       <div class="deposit-item-value" id="depositAccum">0 ₽</div>
     </div>
+  </div>
+
+  <!-- SUMMER FUND -->
+  <div class="admin-block" style="flex-direction:column;gap:0;padding:0;overflow:hidden;margin-top:20px">
+    <div style="padding:14px 24px;background:#FFF6DC;border-bottom:1.5px solid #f0e2b5;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
+      <div>
+        <div style="font-size:13px;font-weight:700;color:var(--gray-900)">☀️ Фонд Лета</div>
+        <div style="font-size:11px;color:var(--gray-500);margin-top:1px">Копится в учебные месяцы на июнь–август: кредит, билеты, жизнь. Депозит 20% не трогаем.</div>
+      </div>
+      <div style="display:flex;gap:6px">
+        <button onclick="editSummerTarget()" style="font-size:11px;font-family:var(--font);border:1px solid var(--gray-200);background:#fff;border-radius:10px;padding:4px 10px;cursor:pointer;color:var(--gray-600)">🎯 цель</button>
+        <button onclick="editSummerMonthly()" style="font-size:11px;font-family:var(--font);border:1px solid var(--gray-200);background:#fff;border-radius:10px;padding:4px 10px;cursor:pointer;color:var(--gray-600)">✏️ план/мес</button>
+      </div>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:0">
+      <div style="padding:14px 24px;border-right:1px solid var(--gray-100)">
+        <div class="deposit-item-label">Цель к июню</div>
+        <div class="deposit-item-value" id="summerTarget">0 ₽</div>
+      </div>
+      <div style="padding:14px 24px;border-right:1px solid var(--gray-100)">
+        <div class="deposit-item-label">Накоплено</div>
+        <div class="deposit-item-value" id="summerSaved">0 ₽</div>
+      </div>
+      <div style="padding:14px 24px;border-right:1px solid var(--gray-100)">
+        <div class="deposit-item-label">Осталось докопить</div>
+        <div class="deposit-item-value" id="summerLeft">0 ₽</div>
+      </div>
+      <div style="padding:14px 24px">
+        <div class="deposit-item-label">За этот месяц <button onclick="editSummerSaved()" style="font-size:10px;font-family:var(--font);border:1px solid var(--gray-200);background:none;border-radius:10px;padding:1px 7px;cursor:pointer;color:var(--gray-400)">✏️</button></div>
+        <div class="deposit-item-value" id="summerThisMonth">0 ₽</div>
+      </div>
+    </div>
+    <div id="summerStatus" style="padding:11px 24px;border-top:2px solid var(--gray-200);font-size:12.5px;font-weight:600"></div>
   </div>
 
   <!-- ANNUAL PREMIUM CALCULATOR -->
@@ -1185,6 +1228,36 @@ if (!monthlyState) {
   localStorage.setItem('ss_monthly', JSON.stringify(monthlyState));
 }
 function saveMonthlyState() { localStorage.setItem('ss_monthly', JSON.stringify(monthlyState)); }
+
+// --- Фонд Лета: копим в учебные месяцы на июнь-август (кредит, билеты, жизнь) ---
+// Цель по умолчанию 1 800 000 (200к × 9 мес): кредит 510к + билеты 500к + жизнь 600к + запас.
+let summerState = JSON.parse(localStorage.getItem('ss_summer') || 'null') || { target: 1800000, monthly: 200000, saved: {} };
+function saveSummerState() { localStorage.setItem('ss_summer', JSON.stringify(summerState)); }
+function summerSavedTotal() { return Object.values(summerState.saved || {}).reduce((a, b) => a + (+b || 0), 0); }
+function summerThisMonth() { return (summerState.saved || {})[picker.value] || 0; }
+function editSummerTarget() {
+  const v = prompt('Цель Фонда Лета к июню (₽):', summerState.target || 1800000);
+  if (v === null) return;
+  const n = parseInt(String(v).replace(/[^0-9]/g, ''), 10);
+  if (n > 0) { summerState.target = n; saveSummerState(); render(); }
+}
+function editSummerMonthly() {
+  const v = prompt('Сколько откладывать в месяц (₽):', summerState.monthly || 200000);
+  if (v === null) return;
+  const n = parseInt(String(v).replace(/[^0-9]/g, ''), 10);
+  if (n > 0) { summerState.monthly = n; saveSummerState(); render(); }
+}
+function editSummerSaved() {
+  const [y, m] = picker.value.split('-');
+  const label = monthNames[parseInt(m) - 1] + ' ' + y;
+  const cur = (summerState.saved || {})[picker.value] || '';
+  const v = prompt('Сколько реально отложила в Фонд Лета за ' + label + ' (₽):', cur);
+  if (v === null) return;
+  const n = parseInt(String(v).replace(/[^0-9]/g, ''), 10);
+  summerState.saved = summerState.saved || {};
+  if (!n) delete summerState.saved[picker.value]; else summerState.saved[picker.value] = n;
+  saveSummerState(); render();
+}
 function monthlyAmount(kind, ym) { return (monthlyState[kind] || {})[ym || picker.value] || 0; }
 
 // ---------- ДАТИРОВАННЫЕ ПЛАТЕЖИ: НАЛОГИ И ПРОЧИЕ РАСХОДЫ ----------
@@ -1358,6 +1431,41 @@ function render() {
   document.getElementById('reserveSub').textContent = reserve > 0
     ? '20% от прибыли ' + fmt(profit) + ' · за 9 мес: ' + fmt(reserve * 9)
     : 'Нет прибыли для резерва';
+
+  // --- Фонд Лета ---
+  const summerPlan = summerState.monthly || 0;
+  const summerSaved = summerSavedTotal();
+  const summerLeft = Math.max(0, (summerState.target || 0) - summerSaved);
+  document.getElementById('summerMonthlyCard').textContent = fmt(summerPlan);
+  document.getElementById('summerTarget').textContent = fmt(summerState.target || 0);
+  document.getElementById('summerSaved').textContent = fmt(summerSaved);
+  document.getElementById('summerLeft').textContent = fmt(summerLeft);
+  document.getElementById('summerThisMonth').textContent = fmt(summerThisMonth());
+  // сколько уже отложено месяцев и идём ли по графику: цель за 9 учебных месяцев
+  const paidMonths = Object.values(summerState.saved || {}).filter((v) => +v > 0).length;
+  const onTrackNeed = Math.round((summerState.target || 0) / 9 * Math.max(1, paidMonths));
+  const st = document.getElementById('summerStatus');
+  if (summerSaved >= (summerState.target || 0) && summerState.target > 0) {
+    st.textContent = '✅ Цель на лето собрана — ' + fmt(summerSaved) + '. Дальше лишнее уходит в депозит.';
+    st.style.color = 'var(--green)';
+  } else if (paidMonths === 0) {
+    st.textContent = 'Плановый взнос ' + fmt(summerPlan) + '/мес × 9 = ' + fmt(summerPlan * 9) + '. Отмечай кнопкой ✏️, сколько отложила за месяц.';
+    st.style.color = 'var(--gray-500)';
+  } else if (summerSaved >= onTrackNeed) {
+    st.textContent = '👍 По графику: за ' + paidMonths + ' мес отложено ' + fmt(summerSaved) + ', до цели ' + fmt(summerLeft) + '.';
+    st.style.color = 'var(--green)';
+  } else {
+    st.textContent = '⚠️ Отстаём: за ' + paidMonths + ' мес отложено ' + fmt(summerSaved) + ', по графику надо было ' + fmt(onTrackNeed) + '. До цели ' + fmt(summerLeft) + '.';
+    st.style.color = 'var(--red)';
+  }
+
+  // Свободно на руки = остаток − резерв 20% − плановый взнос в Фонд Лета
+  const freeCash = remainder - reserve - summerPlan;
+  document.getElementById('freeAmt').textContent = fmt(freeCash);
+  document.getElementById('freeAmt').style.color = freeCash >= 0 ? 'var(--green)' : 'var(--red)';
+  document.getElementById('freeSub').textContent = freeCash >= 0
+    ? 'после депозита и фонда лета'
+    : 'не хватает на депозит + лето';
   document.getElementById('potentialRevenue').textContent = fmt(totalPotential);
   document.getElementById('potentialDiff').textContent = '+' + fmt(totalPotential - totalRevenue) + ' к текущему';
 
