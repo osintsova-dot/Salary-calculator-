@@ -1738,13 +1738,21 @@ function render() {
 function change(i, delta) {
   const cur = state.pupils[i] || 0;
   state.pupils[i] = Math.max(0, Math.min(MAX_PUPILS, cur + delta));
+  detachCrm(i);
   render();
 }
 
 function set(i, val) {
   const v = parseInt(val);
   if (!isNaN(v)) state.pupils[i] = Math.max(0, Math.min(MAX_PUPILS, v));
+  detachCrm(i);
   render();
+}
+
+// Ручная правка числа детей отвязывает группу от суммы из CRM:
+// иначе выручка берётся из CRM и не реагирует на изменение детей.
+function detachCrm(i) {
+  if (state.crmRev && state.crmRev[i] != null) delete state.crmRev[i];
 }
 
 // ---- HISTORY ----
