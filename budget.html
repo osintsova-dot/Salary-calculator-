@@ -102,6 +102,18 @@ header{background:linear-gradient(135deg,var(--p),var(--p2));color:#fff;padding:
   <button class="addout" onclick="openAdd('expense')">+ Трата</button>
 </div>
 
+<div class="sheet" id="nameSheet">
+  <div class="card">
+    <h3>Кто пользуется этим телефоном?</h3>
+    <div style="font-size:12px;color:var(--mut);margin:-6px 0 14px">Записи, которые ты добавишь, будут помечены этим именем.</div>
+    <div class="chips" style="flex-direction:column;gap:10px">
+      <button class="chip" style="text-align:center;padding:14px;font-size:16px" onclick="setMe('Оксана')">👩 Оксана</button>
+      <button class="chip" style="text-align:center;padding:14px;font-size:16px" onclick="setMe('Александр')">👨 Александр</button>
+      <button class="chip" style="text-align:center;padding:11px;color:var(--mut)" onclick="setMeOther()">✏️ другое имя</button>
+    </div>
+  </div>
+</div>
+
 <div class="sheet" id="sheet">
   <div class="card">
     <h3 id="sheetTitle">Добавить</h3>
@@ -192,9 +204,11 @@ function saveEntry(){
 function delEntry(id){ data.entries=data.entries.filter(e=>e.id!==id); save(); render(); }
 
 // --- профиль / код семьи ---
-function changeMe(){
-  const v=prompt('Как тебя зовут? (это устройство). Например: Оксана',me||'');
-  if(v===null)return; me=v.trim(); localStorage.setItem(LS_ME,me); render();
+function changeMe(){ $('nameSheet').classList.add('open'); }
+function setMe(n){ me=n; localStorage.setItem(LS_ME,me); $('nameSheet').classList.remove('open'); render(); }
+function setMeOther(){
+  const v=prompt('Впиши своё имя:',me||'');
+  if(v===null)return; if(v.trim()){ setMe(v.trim()); }
 }
 function changeCode(){
   const v=prompt('Код семьи — общий пароль, чтобы бюджет видели только вы двое.\nВведите одинаковый код на обоих телефонах:',code||'');
@@ -203,6 +217,7 @@ function changeCode(){
 
 month.addEventListener('change',render);
 $('sheet').addEventListener('click',e=>{if(e.target===$('sheet'))closeSheet();});
+$('nameSheet').addEventListener('click',e=>{if(e.target===$('nameSheet'))$('nameSheet').classList.remove('open');});
 render();
 // при первом заходе — мягкая подсказка вместо блокирующего диалога
 if(!me||!code){ setTimeout(()=>{ $('meBtn').style.animation='pulse 1s 3'; }, 300); }
