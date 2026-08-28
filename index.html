@@ -1597,6 +1597,21 @@ async function loadFinanceCsv(files){
   alert('Загружено — '+msg.join(', ')+'. Смотри карточки «Реально пришло» и «Расходы факт».');
 }
 
+async function fetchFinanceData(){
+  const token=localStorage.getItem('bbToken')||''; if(!token) return;
+  try{
+    const r=await fetch('https://ss-bb.o-sintsova.workers.dev/finance-data?t='+encodeURIComponent(token),{cache:'no-store'});
+    const d=await r.json();
+    if(d && d.ok){
+      if(d.cash) localStorage.setItem('ss_cash',JSON.stringify(d.cash));
+      if(d.spent) localStorage.setItem('ss_spent',JSON.stringify(d.spent));
+      if(d.paidFor) localStorage.setItem('ss_paidfor',JSON.stringify(d.paidFor));
+      if(d.at) localStorage.setItem('ss_finance_at',d.at);
+      renderFinance();
+    }
+  }catch(e){}
+}
+
 function renderFinance() {
   let paid={}, spent={};
   try { paid=JSON.parse(localStorage.getItem('ss_paidfor')||'{}'); } catch(e){}
@@ -2040,6 +2055,7 @@ function deleteMonth(month) {
 const picker = document.getElementById('monthPicker');
 const now = new Date();
 picker.value = localStorage.getItem('ss_last_month') || now.toISOString().slice(0, 7);
+setTimeout(fetchFinanceData, 100);
 
 const monthNames = ['январь','февраль','март','апрель','май','июнь',
   'июль','август','сентябрь','октябрь','ноябрь','декабрь'];
@@ -2913,6 +2929,7 @@ async function bbServerRefresh() {
     localStorage.setItem('bbToken', token);
     applyBigBen(d.list);
     try { if (d.cash) localStorage.setItem('ss_cash', JSON.stringify(d.cash)); if (d.spent) localStorage.setItem('ss_spent', JSON.stringify(d.spent)); if (d.paidFor) localStorage.setItem('ss_paidfor', JSON.stringify(d.paidFor)); } catch(e) {}
+    fetchFinanceData();
     renderFinance();
     if (d.cached && d.at) {
       const dt = new Date(d.at);
