@@ -981,6 +981,7 @@
   </div><!-- /tab-salary -->
 
   <div id="tab-personal" hidden>
+    <div id="familyLink" style="background:#fff;border:1px solid var(--line);border-radius:12px;padding:11px 14px;margin-bottom:14px;font-size:13px"></div>
     <div class="summary-grid">
       <div class="card">
         <div class="card-label">💰 Доход месяца</div>
@@ -1178,6 +1179,7 @@
 </div>
 
 <script>
+var FAMILY_SYNC='https://functions.yandexcloud.net/d4eebjc2qs4ku5ijpn8j', famTimer=null, famLast={};
 const DEPOSIT = 2500;
 const ADMIN_MIN = 80000;
 const ADMIN_PCT = 0.05;
@@ -1707,6 +1709,7 @@ function render() {
   const freeCash = remainder - sumActual;
   window.__freeCash = freeCash;   // доход для вкладки «Мои деньги»
   try { const fc = JSON.parse(localStorage.getItem('ss_free_cash') || '{}'); fc[picker.value] = Math.max(0, Math.round(freeCash)); localStorage.setItem('ss_free_cash', JSON.stringify(fc)); } catch(e) {}
+  pushSchoolToFamily(picker.value, Math.max(0, Math.round(freeCash)));
   if (typeof renderPersonal === 'function' && !document.getElementById('tab-personal').hidden) renderPersonal();
   document.getElementById('freeAmt').textContent = fmt(freeCash);
   document.getElementById('freeAmt').style.color = freeCash >= 0 ? 'var(--green)' : 'var(--red)';
@@ -2983,6 +2986,27 @@ function pRowsHtml(cat, arr) {
   }).join('');
 }
 
+function esc(x){return String(x==null?'':x).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));}
+function familyCode(){ return (localStorage.getItem('ss_family_code')||'').trim(); }
+function setFamilyCode(){
+  const v=prompt('Код семьи (тот же, что в приложении «Бюджет семьи»):', familyCode());
+  if(v===null) return;
+  localStorage.setItem('ss_family_code', v.trim());
+  render();
+}
+function pushSchoolToFamily(ym, sum){
+  const code=familyCode(); if(!code) return;
+  if(famLast[ym]===sum) return;
+  clearTimeout(famTimer);
+  famTimer=setTimeout(()=>{
+    famLast[ym]=sum;
+    fetch(FAMILY_SYNC+'?code='+encodeURIComponent(code),{method:'POST',headers:{'content-type':'application/json'},
+      body:JSON.stringify({entries:[{id:'school-'+ym,month:ym,kind:'income',name:'🏫 Школа',sum:sum,by:'Оксана',ts:Date.now()}]})})
+      .then(()=>{ const el=document.getElementById('famNote'); if(el) el.textContent='отправлено в Бюджет семьи ✓'; })
+      .catch(()=>{ const el=document.getElementById('famNote'); if(el) el.textContent='не ушло — проверь связь'; });
+  },1200);
+}
+
 function renderPersonal() {
   const m = pMonth();
   const free = Math.max(0, window.__freeCash || 0);
@@ -2994,6 +3018,11 @@ function renderPersonal() {
   const left = income - spent;
 
   document.getElementById('pFree').textContent = fmt(free);
+  const fc=familyCode();
+  const fam=document.getElementById('familyLink');
+  if(fam) fam.innerHTML = fc
+    ? '☁️ Уходит в «Бюджет семьи» (код <b>'+esc(fc)+'</b>) <button onclick="setFamilyCode()" style="font-size:10px;border:1px solid var(--gray-200);background:none;border-radius:10px;padding:1px 7px;cursor:pointer;color:var(--gray-400)">изменить</button> <span id="famNote" style="color:var(--green)"></span>'
+    : '☁️ <button onclick="setFamilyCode()" style="font-size:12px;border:1.5px solid var(--purple);background:none;border-radius:10px;padding:4px 10px;cursor:pointer;color:var(--purple);font-weight:700">Связать с «Бюджет семьи»</button> <span style="color:var(--gray-400);font-size:11px">— чтобы «свободно на руки» уходило туда автоматически</span>';
   document.getElementById('pIncomeRows').innerHTML = pRowsHtml('income', m.income);
   document.getElementById('pIncomeTotal').textContent = fmt(income);
   document.getElementById('pFixedRows').innerHTML = pRowsHtml('fixed', m.fixed);
