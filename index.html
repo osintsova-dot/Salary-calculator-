@@ -673,11 +673,7 @@
   </div>
 
   <!-- ВКЛАДКИ -->
-  <div class="tabs">
-    <button class="tab-btn active" id="tabBtnSalary" onclick="switchTab('salary')">🏫 Зарплаты школы</button>
-    <button class="tab-btn" id="tabBtnPersonal" onclick="switchTab('personal')">👛 Мои деньги</button>
-  </div>
-  <div id="tab-salary">
+  <div id="familyLink" style="background:#fff;border:1px solid var(--line);border-radius:12px;padding:11px 14px;margin:0 0 14px;font-size:13px"></div>
 
   <!-- SUMMARY CARDS -->
   <div class="summary-grid">
@@ -1001,80 +997,7 @@
     </div>
   </div>
 
-  </div><!-- /tab-salary -->
 
-  <div id="tab-personal" hidden>
-    <div id="familyLink" style="background:#fff;border:1px solid var(--line);border-radius:12px;padding:11px 14px;margin-bottom:14px;font-size:13px"></div>
-    <div class="summary-grid">
-      <div class="card">
-        <div class="card-label">💰 Доход месяца</div>
-        <div class="card-value purple" id="pIncome">0 ₽</div>
-        <div class="card-sub">свободно со школы + прочее</div>
-      </div>
-      <div class="card">
-        <div class="card-label">Потрачено</div>
-        <div class="card-value" id="pSpent">0 ₽</div>
-        <div class="card-sub" id="pSpentSub">все траты за месяц</div>
-      </div>
-      <div class="card">
-        <div class="card-label">Остаток</div>
-        <div class="card-value green" id="pLeft">0 ₽</div>
-        <div class="card-sub" id="pLeftSub">доход − траты</div>
-      </div>
-    </div>
-
-    <!-- ДОХОД -->
-    <div class="admin-block" style="flex-direction:column;gap:0;padding:0;overflow:hidden;margin-top:20px">
-      <div style="padding:14px 24px;background:#eafaef;border-bottom:1.5px solid #c9ecd4;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
-        <div>
-          <div style="font-size:13px;font-weight:700;color:var(--gray-900)">💰 Доход</div>
-          <div style="font-size:11px;color:var(--gray-500);margin-top:1px">Остаток «на руки» со школы + прочие поступления: аренда, возврат долга, перевод и т.д.</div>
-        </div>
-        <button onclick="pAddRow('income')" style="font-size:11px;font-family:var(--font);border:1px solid var(--gray-200);background:#fff;border-radius:10px;padding:4px 10px;cursor:pointer;color:var(--gray-600)">+ поступление</button>
-      </div>
-      <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 24px;border-bottom:1px solid var(--gray-100)">
-        <div style="font-size:13px;color:var(--gray-700)">🏫 Свободно со школы <span style="font-size:11px;color:var(--gray-400)">(из вкладки «Зарплаты»)</span></div>
-        <div class="admin-item-value" id="pFree" style="color:var(--green)">0 ₽</div>
-      </div>
-      <div id="pIncomeRows"></div>
-      <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 24px;background:#eafaef;border-top:2px solid #c9ecd4">
-        <div style="font-size:13px;font-weight:600;color:var(--gray-600)">Итого доход</div>
-        <div class="admin-item-value" id="pIncomeTotal" style="font-size:16px;color:var(--green)">0 ₽</div>
-      </div>
-    </div>
-
-    <!-- ОБЯЗАТЕЛЬНОЕ -->
-    <div class="admin-block" style="flex-direction:column;gap:0;padding:0;overflow:hidden;margin-top:20px">
-      <div style="padding:14px 24px;background:#fff3f3;border-bottom:1.5px solid #f6d5d5;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
-        <div>
-          <div style="font-size:13px;font-weight:700;color:var(--gray-900)">🔴 Обязательное</div>
-          <div style="font-size:11px;color:var(--gray-500);margin-top:1px">Еда, дом, семья — то, что не режется.</div>
-        </div>
-        <button onclick="pAddRow('fixed')" style="font-size:11px;font-family:var(--font);border:1px solid var(--gray-200);background:#fff;border-radius:10px;padding:4px 10px;cursor:pointer;color:var(--gray-600)">+ статья</button>
-      </div>
-      <div id="pFixedRows"></div>
-      <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 24px;background:#fff3f3;border-top:2px solid #f6d5d5">
-        <div style="font-size:13px;font-weight:600;color:var(--gray-600)">Итого обязательное</div>
-        <div class="admin-item-value" id="pFixedTotal" style="font-size:16px">0 ₽</div>
-      </div>
-    </div>
-
-    <!-- ПЕРЕМЕННОЕ -->
-    <div class="admin-block" style="flex-direction:column;gap:0;padding:0;overflow:hidden;margin-top:20px">
-      <div style="padding:14px 24px;background:#fffaf0;border-bottom:1.5px solid #f2e6cc;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
-        <div>
-          <div style="font-size:13px;font-weight:700;color:var(--gray-900)">🟡 Переменное</div>
-          <div style="font-size:11px;color:var(--gray-500);margin-top:1px">Кафе, одежда, досуг — тут манёвр, когда туго.</div>
-        </div>
-        <button onclick="pAddRow('var')" style="font-size:11px;font-family:var(--font);border:1px solid var(--gray-200);background:#fff;border-radius:10px;padding:4px 10px;cursor:pointer;color:var(--gray-600)">+ статья</button>
-      </div>
-      <div id="pVarRows"></div>
-      <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 24px;background:#fffaf0;border-top:2px solid #f2e6cc">
-        <div style="font-size:13px;font-weight:600;color:var(--gray-600)">Итого переменное</div>
-        <div class="admin-item-value" id="pVarTotal" style="font-size:16px">0 ₽</div>
-      </div>
-    </div>
-  </div><!-- /tab-personal -->
 
 </div>
 
@@ -1612,7 +1535,18 @@ async function fetchFinanceData(){
   }catch(e){}
 }
 
+function renderFamilyLink(){
+  const fc=(localStorage.getItem('ss_family_code')||'').trim();
+  const on=localStorage.getItem('ss_send_school')==='1';
+  const fam=document.getElementById('familyLink');
+  if(!fam) return;
+  fam.innerHTML = on
+    ? '☁️ «Свободно на руки» уходит в «Бюджет семьи» (код <b>'+esc(fc)+'</b>) <span id="famNote" style="color:var(--green)"></span> <button onclick="unlinkSchool()" style="font-size:10px;border:1px solid var(--gray-200);background:none;border-radius:10px;padding:1px 7px;cursor:pointer;color:var(--gray-400)">выключить</button>'
+    : '☁️ «Свободно на руки»: сейчас вводишь в приложении «Бюджет семьи» вручную. <button onclick="setFamilyCode()" style="font-size:12px;border:1.5px solid var(--purple);background:none;border-radius:10px;padding:4px 10px;cursor:pointer;color:var(--purple);font-weight:700">Включить автоотправку</button>';
+}
+
 function renderFinance() {
+  renderFamilyLink();
   let paid={}, spent={};
   try { paid=JSON.parse(localStorage.getItem('ss_paidfor')||'{}'); } catch(e){}
   try { spent=JSON.parse(localStorage.getItem('ss_spent')||'{}'); } catch(e){}
@@ -1801,7 +1735,6 @@ function render() {
   window.__freeCash = freeCash;   // доход для вкладки «Мои деньги»
   try { const fc = JSON.parse(localStorage.getItem('ss_free_cash') || '{}'); fc[picker.value] = Math.max(0, Math.round(freeCash)); localStorage.setItem('ss_free_cash', JSON.stringify(fc)); } catch(e) {}
   pushSchoolToFamily(picker.value, Math.max(0, Math.round(freeCash)));
-  if (typeof renderPersonal === 'function' && !document.getElementById('tab-personal').hidden) renderPersonal();
   document.getElementById('freeAmt').textContent = fmt(freeCash);
   document.getElementById('freeAmt').style.color = freeCash >= 0 ? 'var(--green)' : 'var(--red)';
   document.getElementById('freeSub').textContent = freeCash >= 0
@@ -3119,11 +3052,6 @@ function renderPersonal() {
   const left = income - spent;
 
   document.getElementById('pFree').textContent = fmt(free);
-  const fc=familyCode();
-  const fam=document.getElementById('familyLink');
-  if(fam) fam.innerHTML = schoolLinkOn()
-    ? '☁️ «Свободно на руки» уходит в «Бюджет семьи» (код <b>'+esc(fc)+'</b>) <span id="famNote" style="color:var(--green)"></span> <button onclick="unlinkSchool()" style="font-size:10px;border:1px solid var(--gray-200);background:none;border-radius:10px;padding:1px 7px;cursor:pointer;color:var(--gray-400)">выключить</button>'
-    : '☁️ Сейчас «Школу» вводишь в бюджете вручную. <button onclick="setFamilyCode()" style="font-size:12px;border:1.5px solid var(--purple);background:none;border-radius:10px;padding:4px 10px;cursor:pointer;color:var(--purple);font-weight:700">Включить автоотправку</button> <span style="color:var(--gray-400);font-size:11px">— когда пойдут живые деньги</span>';
   document.getElementById('pIncomeRows').innerHTML = pRowsHtml('income', m.income);
   document.getElementById('pIncomeTotal').textContent = fmt(income);
   document.getElementById('pFixedRows').innerHTML = pRowsHtml('fixed', m.fixed);
@@ -3151,7 +3079,6 @@ function switchTab(name) {
   if (!salary) renderPersonal();
 }
 // восстановить выбранную вкладку
-if (localStorage.getItem('ss_active_tab') === 'personal') switchTab('personal');
 
 </script>
 </body>
