@@ -1427,6 +1427,7 @@ let state = JSON.parse(localStorage.getItem('ss_salary_state') || 'null') || {
 };
 // выручка, посчитанная самой CRM (уже со скидками); нет данных — считаем по тарифу
 if (!state.crmRev) state.crmRev = {};
+if (!state.inactive) state.inactive = {};
 
 function fmt(n) {
   return n.toLocaleString('ru-RU') + ' ₽';
@@ -1457,6 +1458,7 @@ function render() {
   let totalPotential = 0;
 
   GROUPS.forEach((g, i) => {
+    if (state.inactive && state.inactive[i]) return;   // группа не открыта — не считаем
     const c = calcGroup(i);
     totalRevenue += c.revenue;
     totalFot += c.fot;
@@ -1519,8 +1521,9 @@ function render() {
   document.getElementById('totalPupils').textContent = totalPupils + ' учеников в ' + GROUPS.length + ' группах';
   document.getElementById('totalFot').textContent = fmt(totalFot);
   document.getElementById('totalHandsPay').textContent = 'На руки: ' + fmt(totalHands);
+  const activeGroups = GROUPS.filter((g, i) => !(state.inactive && state.inactive[i])).length;
   document.getElementById('totalDeposit').textContent = fmt(totalDeposit);
-  document.getElementById('depositYearly').textContent = 'За 9 мес: ' + fmt(totalDeposit * 9);
+  document.getElementById('depositYearly').textContent = activeGroups + ' активных групп · за 9 мес: ' + fmt(totalDeposit * 9);
   document.getElementById('adminPay').textContent = fmt(adminPay);
   document.getElementById('adminNote').textContent = adminPct >= ADMIN_MIN
     ? '5% = ' + fmt(adminPct)
@@ -1656,6 +1659,7 @@ function render() {
     let tRevenue = 0, tFot = 0, tHands = 0, tDeposit = 0, tPupils = 0;
 
     tGroups.forEach(g => {
+      if (state.inactive && state.inactive[g.i]) return;
       const c = calcGroup(g.i);
       tRevenue += c.revenue; tFot += c.fot; tHands += c.hands;
       tDeposit += c.deposit; tPupils += (state.pupils[g.i] || 0);
@@ -1702,12 +1706,17 @@ function render() {
     const tbody = block.querySelector('tbody');
 
     tGroups.forEach(g => {
-      const c = calcGroup(g.i);
+      const inactive = state.inactive && state.inactive[g.i];
+      const c = inactive ? { revenue: 0, fot: 0, deposit: 0, hands: 0 } : calcGroup(g.i);
       const p = state.pupils[g.i] || 0;
       const tr = document.createElement('tr');
+      if (inactive) tr.style.opacity = '0.4';
       tr.innerHTML = `
         <td class="group-name">
-          <span class="pupils-status ${statusDot(p)}"></span>${g.name}
+          <label style="display:inline-flex;align-items:center;gap:6px;cursor:pointer" title="Снять галочку — группа не открыта, не идёт в отпускные и расчёты">
+            <input type="checkbox" ${inactive ? '' : 'checked'} onchange="toggleActive(${g.i}, this.checked)" style="cursor:pointer">
+            <span class="pupils-status ${statusDot(p)}"></span>${g.name}
+          </label>
         </td>
         <td><span class="badge badge-${g.dur}">${g.dur} мин</span></td>
         <td>
@@ -1765,6 +1774,11 @@ function set(i, val) {
 
 // Ручная правка числа детей отвязывает группу от суммы из CRM:
 // иначе выручка берётся из CRM и не реагирует на изменение детей.
+function toggleActive(i, isActive) {
+  if (!state.inactive) state.inactive = {};
+  if (isActive) delete state.inactive[i]; else state.inactive[i] = true;
+  render();
+}
 function detachCrm(i) {
   if (state.crmRev && state.crmRev[i] != null) delete state.crmRev[i];
 }
