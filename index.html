@@ -2991,10 +2991,16 @@ function familyCode(){ return (localStorage.getItem('ss_family_code')||'').trim(
 function setFamilyCode(){
   const v=prompt('Код семьи (тот же, что в приложении «Бюджет семьи»):', familyCode());
   if(v===null) return;
+  if(!v.trim()) return;
   localStorage.setItem('ss_family_code', v.trim());
+  localStorage.setItem('ss_send_school','1');   // включаем автоотправку Школы
+  famLast={};
   render();
 }
+function unlinkSchool(){ localStorage.setItem('ss_send_school','0'); render(); }
+function schoolLinkOn(){ return localStorage.getItem('ss_send_school')==='1'; }
 function pushSchoolToFamily(ym, sum){
+  if(!schoolLinkOn()) return;            // связь выключена — Школу вводят вручную
   const code=familyCode(); if(!code) return;
   if(famLast[ym]===sum) return;
   clearTimeout(famTimer);
@@ -3020,9 +3026,9 @@ function renderPersonal() {
   document.getElementById('pFree').textContent = fmt(free);
   const fc=familyCode();
   const fam=document.getElementById('familyLink');
-  if(fam) fam.innerHTML = fc
-    ? '☁️ Уходит в «Бюджет семьи» (код <b>'+esc(fc)+'</b>) <button onclick="setFamilyCode()" style="font-size:10px;border:1px solid var(--gray-200);background:none;border-radius:10px;padding:1px 7px;cursor:pointer;color:var(--gray-400)">изменить</button> <span id="famNote" style="color:var(--green)"></span>'
-    : '☁️ <button onclick="setFamilyCode()" style="font-size:12px;border:1.5px solid var(--purple);background:none;border-radius:10px;padding:4px 10px;cursor:pointer;color:var(--purple);font-weight:700">Связать с «Бюджет семьи»</button> <span style="color:var(--gray-400);font-size:11px">— чтобы «свободно на руки» уходило туда автоматически</span>';
+  if(fam) fam.innerHTML = schoolLinkOn()
+    ? '☁️ «Свободно на руки» уходит в «Бюджет семьи» (код <b>'+esc(fc)+'</b>) <span id="famNote" style="color:var(--green)"></span> <button onclick="unlinkSchool()" style="font-size:10px;border:1px solid var(--gray-200);background:none;border-radius:10px;padding:1px 7px;cursor:pointer;color:var(--gray-400)">выключить</button>'
+    : '☁️ Сейчас «Школу» вводишь в бюджете вручную. <button onclick="setFamilyCode()" style="font-size:12px;border:1.5px solid var(--purple);background:none;border-radius:10px;padding:4px 10px;cursor:pointer;color:var(--purple);font-weight:700">Включить автоотправку</button> <span style="color:var(--gray-400);font-size:11px">— когда пойдут живые деньги</span>';
   document.getElementById('pIncomeRows').innerHTML = pRowsHtml('income', m.income);
   document.getElementById('pIncomeTotal').textContent = fmt(income);
   document.getElementById('pFixedRows').innerHTML = pRowsHtml('fixed', m.fixed);

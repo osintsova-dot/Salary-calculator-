@@ -264,9 +264,8 @@ function changeCode(){
   if(code){ pullSync().then(pushSync); }
 }
 
-month.addEventListener('change',()=>{ syncSchoolIncome(); render(); if(code) pushSync(); });
-syncSchoolIncome();
-if(code){ pullSync().then(()=>{ if(syncSchoolIncome()) pushSync(); }); setInterval(()=>{ if(!document.hidden){ syncSchoolIncome(); pullSync(); } }, 12000); }
+month.addEventListener('change',()=>{ render(); if(code) pushSync(); });
+if(code){ pullSync(); setInterval(()=>{ if(!document.hidden) pullSync(); }, 12000); }
 document.addEventListener('visibilitychange',()=>{ if(!document.hidden&&code) pullSync(); });
 $('sheet').addEventListener('click',e=>{if(e.target===$('sheet'))closeSheet();});
 $('nameSheet').addEventListener('click',e=>{if(e.target===$('nameSheet'))$('nameSheet').classList.remove('open');});
