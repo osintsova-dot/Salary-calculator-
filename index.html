@@ -687,9 +687,14 @@
       <div class="card-sub" id="totalPupils">0 учеников</div>
     </div>
     <div class="card">
-      <div class="card-label">💵 Реально пришло <span style="font-size:9px;color:var(--gray-400)">касса за месяц</span></div>
-      <div class="card-value green" id="cashReal">—</div>
-      <div class="card-sub" id="cashSub">оплаты из CRM</div>
+      <div class="card-label">✅ Оплачено за месяц <span style="font-size:9px;color:var(--gray-400)">факт из CRM</span></div>
+      <div class="card-value green" id="paidReal">—</div>
+      <div class="card-sub" id="paidSub">за этот учебный месяц</div>
+    </div>
+    <div class="card">
+      <div class="card-label">⚠️ Долг <span style="font-size:9px;color:var(--gray-400)">не оплатили</span></div>
+      <div class="card-value" id="debtReal" style="color:var(--red,#c00)">—</div>
+      <div class="card-sub" id="debtSub">начислено − оплачено</div>
     </div>
     <div class="card">
       <div class="card-label">🧾 Расходы факт</div>
@@ -1562,20 +1567,21 @@ function calcGroup(i) {
   return { revenue, fot, hands: Math.max(0, hands), deposit: DEPOSIT };
 }
 
+const MONTHS_RU_C={"январ":"01","феврал":"02","март":"03","апрел":"04","ма":"05","июн":"06","июл":"07","август":"08","сентябр":"09","октябр":"10","ноябр":"11","декабр":"12"};
 function csvSumByMonth(text){
-  const out={};
-  const lines=text.split(/\r?\n/);
+  const cash={}, paidFor={};
+  const lines=text.split('\n');
   for(let i=1;i<lines.length;i++){
     const line=lines[i]; if(!line) continue;
-    const cells=line.match(/("([^"]|"")*"|[^;]*)(;|$)/g);
-    if(!cells||cells.length<6) continue;
-    const date=cells[0].replace(/[";]/g,'').trim();
+    const p=line.split(';'); if(p.length<5) continue;
+    const date=p[0].replace(/["]/g,'').trim();
     const m=date.match(/^(\d{2})\.(\d{2})\.(\d{4})/); if(!m) continue;
-    const ym=m[3]+'-'+m[2];
-    const sum=parseFloat(cells[4].replace(/[";\s]/g,'').replace(',','.'));
-    if(!isNaN(sum)) out[ym]=(out[ym]||0)+sum;
+    const sum=parseFloat(p[4].replace(/["\s]/g,'').replace(',','.')); if(isNaN(sum)) continue;
+    cash[m[3]+'-'+m[2]]=(cash[m[3]+'-'+m[2]]||0)+sum;
+    const comment=p.slice(5).join(';').toLowerCase();
+    for(const st in MONTHS_RU_C){ if(comment.indexOf(st)>=0){ const mm=MONTHS_RU_C[st]; const yr=(+mm>=9)?'2026':'2027'; const k=yr+'-'+mm; paidFor[k]=(paidFor[k]||0)+sum; break; } }
   }
-  return out;
+  return {cash, paidFor};
 }
 async function loadFinanceCsv(files){
   let cashLoaded=false, spentLoaded=false, msg=[];
@@ -1584,29 +1590,33 @@ async function loadFinanceCsv(files){
     let text; try{ text=new TextDecoder('windows-1251').decode(buf); }catch(e){ text=new TextDecoder().decode(buf); }
     const isIncome=/income|доход/i.test(f.name) || /Оплата обучения/i.test(text.slice(0,500));
     const sums=csvSumByMonth(text);
-    if(isIncome){ localStorage.setItem('ss_cash',JSON.stringify(sums)); cashLoaded=true; msg.push('доходы: '+Object.keys(sums).length+' мес'); }
-    else { localStorage.setItem('ss_spent',JSON.stringify(sums)); spentLoaded=true; msg.push('расходы: '+Object.keys(sums).length+' мес'); }
+    if(isIncome){ localStorage.setItem('ss_cash',JSON.stringify(sums.cash)); localStorage.setItem('ss_paidfor',JSON.stringify(sums.paidFor)); cashLoaded=true; msg.push('доходы: '+Object.keys(sums.cash).length+' мес'); }
+    else { localStorage.setItem('ss_spent',JSON.stringify(sums.cash)); spentLoaded=true; msg.push('расходы: '+Object.keys(sums.cash).length+' мес'); }
   }
   renderFinance();
   alert('Загружено — '+msg.join(', ')+'. Смотри карточки «Реально пришло» и «Расходы факт».');
 }
 
 function renderFinance() {
-  let cash={}, spent={};
-  try { cash=JSON.parse(localStorage.getItem('ss_cash')||'{}'); } catch(e){}
+  let paid={}, spent={};
+  try { paid=JSON.parse(localStorage.getItem('ss_paidfor')||'{}'); } catch(e){}
   try { spent=JSON.parse(localStorage.getItem('ss_spent')||'{}'); } catch(e){}
   const ym = picker.value;
-  const c = cash[ym], sp = spent[ym];
-  const ce=document.getElementById('cashReal'); if(ce){ ce.textContent = c!=null?fmt(Math.round(c)):'—'; }
+  const p = paid[ym], sp = spent[ym];
+  const rev = (lastTotals && lastTotals.revenue) || 0;
+  const pe=document.getElementById('paidReal'); if(pe){ pe.textContent = p!=null?fmt(Math.round(p)):'—'; }
   const se=document.getElementById('spentReal'); if(se){ se.textContent = sp!=null?fmt(Math.round(sp)):'—'; }
-  const cs=document.getElementById('cashSub');
-  if(cs){
-    const rev = (lastTotals && lastTotals.revenue) || 0;
-    if(c!=null && rev){
-      const diff = rev - Math.round(c);
-      cs.textContent = diff>0 ? 'ещё не в кассе: '+fmt(diff) : 'пришло больше начисленного';
-    } else cs.textContent = 'оплаты из CRM';
+  const de=document.getElementById('debtReal'), ds=document.getElementById('debtSub');
+  if(de){
+    if(p!=null && rev){
+      const debt = Math.max(0, rev - Math.round(p));
+      de.textContent = fmt(debt);
+      de.style.color = debt>0 ? 'var(--red,#c00)' : 'var(--green)';
+      if(ds) ds.textContent = debt>0 ? 'из начисленных '+fmt(rev) : 'все оплатили 🎉';
+    } else { de.textContent='—'; if(ds) ds.textContent='загрузи оплаты из CRM'; }
   }
+  const ps=document.getElementById('paidSub');
+  if(ps && p!=null && rev) ps.textContent = Math.round(p/rev*100)+'% от начисленного';
 }
 
 function render() {
@@ -2902,7 +2912,7 @@ async function bbServerRefresh() {
     if (!d.ok) throw new Error(d.error || 'сервер отказал');
     localStorage.setItem('bbToken', token);
     applyBigBen(d.list);
-    try { if (d.cash) localStorage.setItem('ss_cash', JSON.stringify(d.cash)); if (d.spent) localStorage.setItem('ss_spent', JSON.stringify(d.spent)); } catch(e) {}
+    try { if (d.cash) localStorage.setItem('ss_cash', JSON.stringify(d.cash)); if (d.spent) localStorage.setItem('ss_spent', JSON.stringify(d.spent)); if (d.paidFor) localStorage.setItem('ss_paidfor', JSON.stringify(d.paidFor)); } catch(e) {}
     renderFinance();
     if (d.cached && d.at) {
       const dt = new Date(d.at);
