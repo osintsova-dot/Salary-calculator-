@@ -73,6 +73,7 @@ header{background:linear-gradient(135deg,var(--p),var(--p2));color:#fff;padding:
   <div class="mrow">
     <input type="month" id="month">
     <span class="code" id="codeLbl" onclick="changeCode()">код: —</span>
+    <span class="code" id="syncNote" style="margin-left:6px;opacity:.8"></span>
   </div>
 </header>
 
@@ -138,7 +139,37 @@ const LS='ss_family_budget', LS_ME='ss_family_me', LS_CODE='ss_family_code';
 let data=JSON.parse(localStorage.getItem(LS)||'null')||{entries:[]};
 let me=localStorage.getItem(LS_ME)||'';
 let code=localStorage.getItem(LS_CODE)||'';
-const save=()=>localStorage.setItem(LS,JSON.stringify(data));
+const SYNC='https://functions.yandexcloud.net/d4eebjc2qs4ku5ijpn8j';
+let syncing=false, syncTimer=null;
+function save(){ localStorage.setItem(LS,JSON.stringify(data)); scheduleSync(); }
+
+// --- синхронизация с общим сервером (по коду семьи) ---
+function scheduleSync(){ if(!code)return; clearTimeout(syncTimer); syncTimer=setTimeout(pushSync,800); }
+async function pushSync(){
+  if(!code||syncing)return; syncing=true; setSyncNote('синхронизирую…');
+  try{
+    // отправляем свои записи, сервер сливает и возвращает общий список
+    const r=await fetch(SYNC+'?code='+encodeURIComponent(code),{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({entries:data.entries})});
+    const d=await r.json();
+    if(d.ok&&Array.isArray(d.entries)){ data.entries=d.entries; localStorage.setItem(LS,JSON.stringify(data)); render(); setSyncNote('обновлено '+timeNow()); }
+    else setSyncNote('сервер: '+(d.error||'ошибка'));
+  }catch(e){ setSyncNote('нет связи — сохранено на телефоне'); }
+  finally{ syncing=false; }
+}
+async function pullSync(){
+  if(!code)return;
+  try{
+    const r=await fetch(SYNC+'?code='+encodeURIComponent(code),{cache:'no-store'});
+    const d=await r.json();
+    if(d.ok&&Array.isArray(d.entries)){ data.entries=mergeEntries(data.entries,d.entries); localStorage.setItem(LS,JSON.stringify(data)); render(); }
+  }catch(e){}
+}
+function mergeEntries(local,remote){
+  const byId={}; [...local,...remote].forEach(e=>{ if(!e.id)return; const c=byId[e.id]; if(!c||(e.ts||0)>=(c.ts||0)) byId[e.id]=e; });
+  return Object.values(byId).filter(e=>!e.deleted);
+}
+function timeNow(){ const d=new Date(); return d.toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'}); }
+function setSyncNote(t){ const el=document.getElementById('syncNote'); if(el) el.textContent=t; }
 
 const CATS={
   income:['🏫 Школа','🏠 Аренда кв.1','🏠 Аренда кв.2','💼 Зарплата','↩️ Возврат долга','💸 Перевод','➕ Другое'],
@@ -149,7 +180,7 @@ const month=$('month');
 month.value=(new Date().toISOString().slice(0,7));
 
 function ym(){return month.value;}
-function monthEntries(){return data.entries.filter(e=>e.month===ym());}
+function monthEntries(){return data.entries.filter(e=>e.month===ym()&&!e.deleted);}
 
 function render(){
   const hb=document.getElementById('hello'); if(hb) hb.style.display=(me&&code)?'none':'block';
@@ -201,7 +232,11 @@ function saveEntry(){
   data.entries.push({id:uid(),month:ym(),kind:addKind,name,sum,by:me,ts:Date.now()});
   save(); closeSheet(); render();
 }
-function delEntry(id){ data.entries=data.entries.filter(e=>e.id!==id); save(); render(); }
+function delEntry(id){
+  const e=data.entries.find(x=>x.id===id);
+  if(e){ e.deleted=true; e.ts=Date.now(); }
+  save(); render();
+}
 
 // --- профиль / код семьи ---
 function changeMe(){ $('nameSheet').classList.add('open'); }
@@ -213,9 +248,12 @@ function setMeOther(){
 function changeCode(){
   const v=prompt('Код семьи — общий пароль, чтобы бюджет видели только вы двое.\nВведите одинаковый код на обоих телефонах:',code||'');
   if(v===null)return; code=v.trim(); localStorage.setItem(LS_CODE,code); render();
+  if(code){ pullSync().then(pushSync); }
 }
 
 month.addEventListener('change',render);
+if(code){ pullSync(); setInterval(()=>{ if(!document.hidden) pullSync(); }, 12000); }
+document.addEventListener('visibilitychange',()=>{ if(!document.hidden&&code) pullSync(); });
 $('sheet').addEventListener('click',e=>{if(e.target===$('sheet'))closeSheet();});
 $('nameSheet').addEventListener('click',e=>{if(e.target===$('nameSheet'))$('nameSheet').classList.remove('open');});
 render();
