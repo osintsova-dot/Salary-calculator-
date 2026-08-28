@@ -1706,6 +1706,7 @@ function render() {
   // Свободно на руки = остаток − резерв 20% − плановый взнос в Фонд Лета
   const freeCash = remainder - sumActual;
   window.__freeCash = freeCash;   // доход для вкладки «Мои деньги»
+  try { const fc = JSON.parse(localStorage.getItem('ss_free_cash') || '{}'); fc[picker.value] = Math.max(0, Math.round(freeCash)); localStorage.setItem('ss_free_cash', JSON.stringify(fc)); } catch(e) {}
   if (typeof renderPersonal === 'function' && !document.getElementById('tab-personal').hidden) renderPersonal();
   document.getElementById('freeAmt').textContent = fmt(freeCash);
   document.getElementById('freeAmt').style.color = freeCash >= 0 ? 'var(--green)' : 'var(--red)';

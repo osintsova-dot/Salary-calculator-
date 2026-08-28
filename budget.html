@@ -144,6 +144,19 @@ let syncing=false, syncTimer=null;
 function save(){ localStorage.setItem(LS,JSON.stringify(data)); scheduleSync(); }
 
 // --- синхронизация с общим сервером (по коду семьи) ---
+// «Школа» — свободно на руки из калькулятора (тот же домен, localStorage ss_free_cash).
+// Работает только на устройстве, где есть калькулятор (телефон Оксаны).
+function syncSchoolIncome(){
+  let fc={}; try{ fc=JSON.parse(localStorage.getItem('ss_free_cash')||'{}'); }catch(e){}
+  const val=fc[ym()];
+  if(val==null) return false;              // калькулятора тут нет — не трогаем
+  const id='school-'+ym(); const sum=Math.round(val);
+  let e=data.entries.find(x=>x.id===id);
+  if(e){ if(e.sum!==sum||e.deleted){ e.sum=sum; e.deleted=false; e.ts=Date.now(); localStorage.setItem(LS,JSON.stringify(data)); return true; } return false; }
+  data.entries.push({id,month:ym(),kind:'income',name:'🏫 Школа',sum,by:me||'Оксана',ts:Date.now()});
+  localStorage.setItem(LS,JSON.stringify(data)); return true;
+}
+
 function scheduleSync(){ if(!code)return; clearTimeout(syncTimer); syncTimer=setTimeout(pushSync,800); }
 async function pushSync(){
   if(!code||syncing)return; syncing=true; setSyncNote('синхронизирую…');
@@ -251,8 +264,9 @@ function changeCode(){
   if(code){ pullSync().then(pushSync); }
 }
 
-month.addEventListener('change',render);
-if(code){ pullSync(); setInterval(()=>{ if(!document.hidden) pullSync(); }, 12000); }
+month.addEventListener('change',()=>{ syncSchoolIncome(); render(); if(code) pushSync(); });
+syncSchoolIncome();
+if(code){ pullSync().then(()=>{ if(syncSchoolIncome()) pushSync(); }); setInterval(()=>{ if(!document.hidden){ syncSchoolIncome(); pullSync(); } }, 12000); }
 document.addEventListener('visibilitychange',()=>{ if(!document.hidden&&code) pullSync(); });
 $('sheet').addEventListener('click',e=>{if(e.target===$('sheet'))closeSheet();});
 $('nameSheet').addEventListener('click',e=>{if(e.target===$('nameSheet'))$('nameSheet').classList.remove('open');});
