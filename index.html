@@ -688,7 +688,7 @@
       <div class="card-sub" id="paidSub">за этот учебный месяц</div>
     </div>
     <div class="card">
-      <div class="card-label">⚠️ Долг <span style="font-size:9px;color:var(--gray-400)">не оплатили</span></div>
+      <div class="card-label">⚠️ Долг <span style="font-size:9px;color:var(--gray-400)">факт из CRM</span></div>
       <div class="card-value" id="debtReal" style="color:var(--red,#c00)">—</div>
       <div class="card-sub" id="debtSub">начислено − оплачено</div>
     </div>
@@ -1529,6 +1529,9 @@ async function fetchFinanceData(){
       if(d.cash) localStorage.setItem('ss_cash',JSON.stringify(d.cash));
       if(d.spent) localStorage.setItem('ss_spent',JSON.stringify(d.spent));
       if(d.paidFor) localStorage.setItem('ss_paidfor',JSON.stringify(d.paidFor));
+      if(d.debtByMonth) localStorage.setItem('ss_debt',JSON.stringify(d.debtByMonth));
+      if(d.debtTotal!=null) localStorage.setItem('ss_debt_total',String(d.debtTotal));
+      if(d.debtCount!=null) localStorage.setItem('ss_debt_count',String(d.debtCount));
       if(d.at) localStorage.setItem('ss_finance_at',d.at);
       renderFinance();
     }
@@ -1556,13 +1559,20 @@ function renderFinance() {
   const pe=document.getElementById('paidReal'); if(pe){ pe.textContent = p!=null?fmt(Math.round(p)):'—'; }
   const se=document.getElementById('spentReal'); if(se){ se.textContent = sp!=null?fmt(Math.round(sp)):'—'; }
   const de=document.getElementById('debtReal'), ds=document.getElementById('debtSub');
+  let debtMap={}; try{ debtMap=JSON.parse(localStorage.getItem('ss_debt')||'{}'); }catch(e){}
+  const debtTotal=localStorage.getItem('ss_debt_total');
+  const debtCount=localStorage.getItem('ss_debt_count');
   if(de){
-    if(p!=null && rev){
-      const debt = Math.max(0, rev - Math.round(p));
-      de.textContent = fmt(debt);
-      de.style.color = debt>0 ? 'var(--red,#c00)' : 'var(--green)';
-      if(ds) ds.textContent = debt>0 ? 'из начисленных '+fmt(rev) : 'все оплатили 🎉';
-    } else { de.textContent='—'; if(ds) ds.textContent='загрузи оплаты из CRM'; }
+    const dm = debtMap[ym];
+    if(dm!=null){
+      de.textContent = fmt(Math.round(dm));
+      de.style.color = dm>0 ? 'var(--red,#c00)' : 'var(--green)';
+      if(ds) ds.textContent = dm>0 ? ('за этот месяц'+(debtTotal?' · всего '+fmt(+debtTotal):'')) : 'за месяц оплатили все 🎉';
+    } else if(debtTotal!=null){
+      de.textContent = fmt(+debtTotal);
+      de.style.color = +debtTotal>0 ? 'var(--red,#c00)' : 'var(--green)';
+      if(ds) ds.textContent = (debtCount?debtCount+' должников по школе':'всего по школе');
+    } else { de.textContent='—'; if(ds) ds.textContent='обнови данные'; }
   }
   const ps=document.getElementById('paidSub');
   if(ps && p!=null && rev) ps.textContent = Math.round(p/rev*100)+'% от начисленного';
