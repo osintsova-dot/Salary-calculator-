@@ -1,0 +1,211 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<meta name="theme-color" content="#6C3FC5">
+<title>Бюджет семьи</title>
+<link rel="manifest" href="budget-manifest.json">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<style>
+:root{--p:#6C3FC5;--p2:#8B5CF6;--ink:#23203a;--mut:#6b6785;--line:#e4e0f0;--green:#16A34A;--red:#DC2626;--bg:#f6f4fb;--font:-apple-system,"Segoe UI",Roboto,Arial,sans-serif;--mono:ui-monospace,SFMono-Regular,Menlo,monospace}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+body{margin:0;font-family:var(--font);color:var(--ink);background:var(--bg);padding-bottom:90px}
+header{background:linear-gradient(135deg,var(--p),var(--p2));color:#fff;padding:14px 16px}
+.htop{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.htop h1{font-size:17px;margin:0;font-weight:800}
+.me{font-size:12px;background:rgba(255,255,255,.2);border:none;color:#fff;border-radius:20px;padding:6px 12px;font-family:var(--font);font-weight:700;cursor:pointer}
+.mrow{display:flex;align-items:center;gap:8px;margin-top:10px}
+.mrow input[type=month]{font-family:var(--font);font-size:14px;border:none;border-radius:10px;padding:7px 10px;background:#fff;color:var(--ink)}
+.mrow .code{font-size:11px;opacity:.85;margin-left:auto}
+
+.balance{margin:16px;background:#fff;border-radius:18px;padding:20px;box-shadow:0 3px 16px rgba(35,32,58,.08);text-align:center}
+.balance .lbl{font-size:12px;color:var(--mut);text-transform:uppercase;letter-spacing:.04em}
+.balance .val{font-size:38px;font-weight:800;margin:4px 0;font-family:var(--mono)}
+.balance .val.pos{color:var(--green)}.balance .val.neg{color:var(--red)}
+.balance .split{display:flex;justify-content:center;gap:22px;margin-top:8px;font-size:13px}
+.balance .split .in{color:var(--green);font-weight:700}
+.balance .split .out{color:var(--red);font-weight:700}
+
+.section{margin:16px}
+.section h2{font-size:14px;margin:0 0 8px;display:flex;align-items:center;justify-content:space-between}
+.section h2 span{color:var(--mut);font-weight:600;font-size:12px}
+.entry{display:flex;align-items:center;gap:10px;background:#fff;border-radius:14px;padding:11px 14px;margin-bottom:8px;box-shadow:0 1px 5px rgba(35,32,58,.05)}
+.entry .ic{width:34px;height:34px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:17px;flex:none}
+.entry.income .ic{background:#e7f7ec}.entry.expense .ic{background:#fdeaea}
+.entry .mid{flex:1;min-width:0}
+.entry .nm{font-size:14px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.entry .by{font-size:11px;color:var(--mut)}
+.entry .sm{font-family:var(--mono);font-weight:700;font-size:15px;white-space:nowrap}
+.entry.income .sm{color:var(--green)}.entry.expense .sm{color:var(--red)}
+.entry .del{border:none;background:none;color:#cbc7da;font-size:16px;cursor:pointer;padding:0 2px}
+.empty{color:var(--mut);font-size:13px;text-align:center;padding:14px}
+
+.fab{position:fixed;left:0;right:0;bottom:0;display:flex;gap:10px;padding:12px 16px;background:linear-gradient(to top,var(--bg) 70%,transparent)}
+.fab button{flex:1;border:none;border-radius:16px;padding:15px;font-family:var(--font);font-size:15px;font-weight:800;color:#fff;cursor:pointer;box-shadow:0 3px 12px rgba(0,0,0,.15)}
+.fab .addin{background:var(--green)}.fab .addout{background:var(--red)}
+
+.sheet{position:fixed;inset:0;background:rgba(20,16,40,.45);display:none;align-items:flex-end;z-index:50}
+.sheet.open{display:flex}
+.sheet .card{background:#fff;width:100%;border-radius:20px 20px 0 0;padding:18px 16px calc(18px + env(safe-area-inset-bottom));max-height:88vh;overflow:auto}
+.sheet h3{margin:2px 0 12px;font-size:17px}
+.chips{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px}
+.chip{border:1.5px solid var(--line);background:#fff;border-radius:20px;padding:8px 14px;font-size:13px;font-family:var(--font);cursor:pointer;font-weight:600}
+.chip.on{background:var(--p);color:#fff;border-color:var(--p)}
+.fld{margin-bottom:12px}
+.fld label{display:block;font-size:12px;color:var(--mut);margin-bottom:4px}
+.fld input{width:100%;font-family:var(--font);font-size:16px;border:1.5px solid var(--line);border-radius:12px;padding:12px}
+.fld input.sum{font-family:var(--mono);font-weight:700;font-size:22px;text-align:center}
+.sheet .acts{display:flex;gap:10px;margin-top:6px}
+.sheet .acts button{flex:1;border:none;border-radius:14px;padding:14px;font-family:var(--font);font-size:15px;font-weight:800;cursor:pointer}
+.sheet .cancel{background:#eee;color:var(--mut)}
+.sheet .save{background:var(--p);color:#fff}
+@keyframes pulse{0%,100%{transform:scale(1)}50%{transform:scale(1.12)}}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="htop">
+    <h1>👨‍👩‍👧 Бюджет семьи</h1>
+    <button class="me" id="meBtn" onclick="changeMe()">я: —</button>
+  </div>
+  <div class="mrow">
+    <input type="month" id="month">
+    <span class="code" id="codeLbl" onclick="changeCode()">код: —</span>
+  </div>
+</header>
+
+<div id="hello" style="margin:16px;background:#fff;border:1.5px dashed var(--line);border-radius:16px;padding:14px 16px;font-size:13px;color:var(--mut);display:none">👋 Привет! Нажми «я: выбрать» вверху и впиши своё имя, задай общий «код семьи» — и добавляй доходы и траты кнопками внизу.</div>
+
+<div class="balance">
+  <div class="lbl">Остаток в этом месяце</div>
+  <div class="val" id="balVal">0 ₽</div>
+  <div class="split">
+    <span>Доход <b class="in" id="inTot">0 ₽</b></span>
+    <span>Траты <b class="out" id="outTot">0 ₽</b></span>
+  </div>
+</div>
+
+<div class="section">
+  <h2>💰 Доходы <span id="inCount"></span></h2>
+  <div id="incomeList"></div>
+</div>
+
+<div class="section">
+  <h2>🛒 Траты <span id="outCount"></span></h2>
+  <div id="expenseList"></div>
+</div>
+
+<div class="fab">
+  <button class="addin" onclick="openAdd('income')">+ Доход</button>
+  <button class="addout" onclick="openAdd('expense')">+ Трата</button>
+</div>
+
+<div class="sheet" id="sheet">
+  <div class="card">
+    <h3 id="sheetTitle">Добавить</h3>
+    <div class="chips" id="chips"></div>
+    <div class="fld"><label>Название</label><input id="fName" placeholder="например, Продукты"></div>
+    <div class="fld"><label>Сумма, ₽</label><input class="sum" id="fSum" inputmode="numeric" placeholder="0"></div>
+    <div class="acts">
+      <button class="cancel" onclick="closeSheet()">Отмена</button>
+      <button class="save" onclick="saveEntry()">Сохранить</button>
+    </div>
+  </div>
+</div>
+
+<script>
+"use strict";
+const $=id=>document.getElementById(id);
+const fmt=n=>(Math.round(+n||0)).toLocaleString('ru-RU')+' ₽';
+const uid=()=>Math.random().toString(36).slice(2,10)+Date.now().toString(36);
+
+// --- состояние (формат готов к синхронизации: каждая запись с id, by, ts) ---
+const LS='ss_family_budget', LS_ME='ss_family_me', LS_CODE='ss_family_code';
+let data=JSON.parse(localStorage.getItem(LS)||'null')||{entries:[]};
+let me=localStorage.getItem(LS_ME)||'';
+let code=localStorage.getItem(LS_CODE)||'';
+const save=()=>localStorage.setItem(LS,JSON.stringify(data));
+
+const CATS={
+  income:['🏫 Школа','🏠 Аренда кв.1','🏠 Аренда кв.2','💼 Зарплата','↩️ Возврат долга','💸 Перевод','➕ Другое'],
+  expense:['🛒 Продукты','🏡 Дом, ЖКХ','👶 Дети','👵 Мама, брат','🚗 Транспорт','☕ Кафе, досуг','👗 Одежда','💊 Здоровье','➕ Другое'],
+};
+
+const month=$('month');
+month.value=(new Date().toISOString().slice(0,7));
+
+function ym(){return month.value;}
+function monthEntries(){return data.entries.filter(e=>e.month===ym());}
+
+function render(){
+  const hb=document.getElementById('hello'); if(hb) hb.style.display=(me&&code)?'none':'block';
+  $('meBtn').textContent='я: '+(me||'выбрать');
+  $('codeLbl').textContent='код: '+(code||'нет');
+  const es=monthEntries();
+  const inc=es.filter(e=>e.kind==='income'), exp=es.filter(e=>e.kind==='expense');
+  const inTot=inc.reduce((a,e)=>a+e.sum,0), outTot=exp.reduce((a,e)=>a+e.sum,0);
+  const bal=inTot-outTot;
+  $('inTot').textContent=fmt(inTot); $('outTot').textContent=fmt(outTot);
+  const bv=$('balVal'); bv.textContent=fmt(bal); bv.className='val '+(bal>=0?'pos':'neg');
+  $('inCount').textContent=inc.length?inc.length+' шт':''; $('outCount').textContent=exp.length?exp.length+' шт':'';
+  $('incomeList').innerHTML=inc.length?inc.map(rowHtml).join(''):'<div class="empty">Пока нет доходов. Нажми «+ Доход».</div>';
+  $('expenseList').innerHTML=exp.length?exp.map(rowHtml).join(''):'<div class="empty">Пока нет трат. Нажми «+ Трата».</div>';
+}
+function rowHtml(e){
+  const icon=(e.name.match(/^\S+/)||[''])[0];
+  const nm=e.name.replace(/^\S+\s*/,'')||e.name;
+  return '<div class="entry '+e.kind+'">'
+    +'<div class="ic">'+(/\p{Emoji}/u.test(icon)?icon:(e.kind==='income'?'💰':'🛒'))+'</div>'
+    +'<div class="mid"><div class="nm">'+esc(nm)+'</div><div class="by">'+esc(e.by||'')+'</div></div>'
+    +'<div class="sm">'+(e.kind==='expense'?'−':'+')+fmt(e.sum)+'</div>'
+    +'<button class="del" onclick="delEntry(\''+e.id+'\')">✕</button></div>';
+}
+const esc=s=>String(s).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+
+// --- добавление ---
+let addKind='income', chosenCat='';
+function openAdd(kind){
+  if(!me){changeMe();if(!me)return;}
+  addKind=kind; chosenCat='';
+  $('sheetTitle').textContent=kind==='income'?'Добавить доход':'Добавить трату';
+  $('chips').innerHTML=CATS[kind].map(c=>'<button class="chip" onclick="pickCat(this,\''+esc(c).replace(/'/g,'')+'\')">'+c+'</button>').join('');
+  $('fName').value=''; $('fSum').value='';
+  $('sheet').classList.add('open');
+  setTimeout(()=>$('fSum').focus(),200);
+}
+function pickCat(el,c){
+  document.querySelectorAll('#chips .chip').forEach(x=>x.classList.remove('on'));
+  el.classList.add('on'); chosenCat=c;
+  if(!c.startsWith('➕')) $('fName').value=c;
+}
+function closeSheet(){$('sheet').classList.remove('open');}
+function saveEntry(){
+  const name=($('fName').value||chosenCat||'').trim();
+  const sum=parseInt(String($('fSum').value).replace(/[^0-9]/g,''),10);
+  if(!name){$('fName').focus();return;}
+  if(!sum){$('fSum').focus();return;}
+  data.entries.push({id:uid(),month:ym(),kind:addKind,name,sum,by:me,ts:Date.now()});
+  save(); closeSheet(); render();
+}
+function delEntry(id){ data.entries=data.entries.filter(e=>e.id!==id); save(); render(); }
+
+// --- профиль / код семьи ---
+function changeMe(){
+  const v=prompt('Как тебя зовут? (это устройство). Например: Оксана',me||'');
+  if(v===null)return; me=v.trim(); localStorage.setItem(LS_ME,me); render();
+}
+function changeCode(){
+  const v=prompt('Код семьи — общий пароль, чтобы бюджет видели только вы двое.\nВведите одинаковый код на обоих телефонах:',code||'');
+  if(v===null)return; code=v.trim(); localStorage.setItem(LS_CODE,code); render();
+}
+
+month.addEventListener('change',render);
+$('sheet').addEventListener('click',e=>{if(e.target===$('sheet'))closeSheet();});
+render();
+// при первом заходе — мягкая подсказка вместо блокирующего диалога
+if(!me||!code){ setTimeout(()=>{ $('meBtn').style.animation='pulse 1s 3'; }, 300); }
+</script>
+</body>
+</html>
