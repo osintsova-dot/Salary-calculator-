@@ -413,6 +413,17 @@
   .btn-slip:hover { background: var(--purple); color: #fff; }
 
   /* MODAL */
+  .tabs { display:flex; gap:8px; margin-bottom:18px; }
+  .tab-btn { flex:1; font-family:var(--font); font-size:14px; font-weight:700; padding:12px 14px;
+    border-radius:14px; cursor:pointer; border:1.5px solid var(--gray-200); background:#fff; color:var(--gray-500); transition:all .15s; }
+  .tab-btn.active { background:var(--purple); color:#fff; border-color:var(--purple); box-shadow:0 2px 10px rgba(108,63,197,.25); }
+  .p-row { display:flex; align-items:center; justify-content:space-between; gap:10px; padding:10px 24px; border-bottom:1px solid var(--gray-100); }
+  .p-row .p-name { font-size:13px; color:var(--gray-800); border:none; background:none; font-family:var(--font); padding:2px 4px; border-radius:6px; flex:1; min-width:0; }
+  .p-row .p-name:focus { background:var(--gray-50); outline:1px solid var(--gray-200); }
+  .p-row .p-sum { font-family:var(--mono); font-size:14px; font-weight:700; color:var(--gray-900); border:none; background:none; text-align:right; width:110px; padding:2px 4px; border-radius:6px; }
+  .p-row .p-sum:focus { background:var(--gray-50); outline:1px solid var(--gray-200); }
+  .p-row .p-del { border:none; background:none; color:var(--gray-300); cursor:pointer; font-size:15px; padding:0 4px; }
+  .p-row .p-del:hover { color:var(--red, #c00); }
   .modal-overlay {
     display: none;
     position: fixed; inset: 0;
@@ -652,6 +663,13 @@
       ⬇️ Из BigBen
     </button>
   </div>
+
+  <!-- ВКЛАДКИ -->
+  <div class="tabs">
+    <button class="tab-btn active" id="tabBtnSalary" onclick="switchTab('salary')">🏫 Зарплаты школы</button>
+    <button class="tab-btn" id="tabBtnPersonal" onclick="switchTab('personal')">👛 Мои деньги</button>
+  </div>
+  <div id="tab-salary">
 
   <!-- SUMMARY CARDS -->
   <div class="summary-grid">
@@ -959,6 +977,80 @@
       <div style="font-family:var(--mono);font-size:18px;font-weight:700;color:var(--purple)" id="premiumTotal">0 ₽</div>
     </div>
   </div>
+
+  </div><!-- /tab-salary -->
+
+  <div id="tab-personal" hidden>
+    <div class="summary-grid">
+      <div class="card">
+        <div class="card-label">💰 Доход месяца</div>
+        <div class="card-value purple" id="pIncome">0 ₽</div>
+        <div class="card-sub">свободно со школы + прочее</div>
+      </div>
+      <div class="card">
+        <div class="card-label">Потрачено</div>
+        <div class="card-value" id="pSpent">0 ₽</div>
+        <div class="card-sub" id="pSpentSub">все траты за месяц</div>
+      </div>
+      <div class="card">
+        <div class="card-label">Остаток</div>
+        <div class="card-value green" id="pLeft">0 ₽</div>
+        <div class="card-sub" id="pLeftSub">доход − траты</div>
+      </div>
+    </div>
+
+    <!-- ДОХОД -->
+    <div class="admin-block" style="flex-direction:column;gap:0;padding:0;overflow:hidden;margin-top:20px">
+      <div style="padding:14px 24px;background:#eafaef;border-bottom:1.5px solid #c9ecd4;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
+        <div>
+          <div style="font-size:13px;font-weight:700;color:var(--gray-900)">💰 Доход</div>
+          <div style="font-size:11px;color:var(--gray-500);margin-top:1px">Остаток «на руки» со школы + прочие поступления: аренда, возврат долга, перевод и т.д.</div>
+        </div>
+        <button onclick="pAddRow('income')" style="font-size:11px;font-family:var(--font);border:1px solid var(--gray-200);background:#fff;border-radius:10px;padding:4px 10px;cursor:pointer;color:var(--gray-600)">+ поступление</button>
+      </div>
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 24px;border-bottom:1px solid var(--gray-100)">
+        <div style="font-size:13px;color:var(--gray-700)">🏫 Свободно со школы <span style="font-size:11px;color:var(--gray-400)">(из вкладки «Зарплаты»)</span></div>
+        <div class="admin-item-value" id="pFree" style="color:var(--green)">0 ₽</div>
+      </div>
+      <div id="pIncomeRows"></div>
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 24px;background:#eafaef;border-top:2px solid #c9ecd4">
+        <div style="font-size:13px;font-weight:600;color:var(--gray-600)">Итого доход</div>
+        <div class="admin-item-value" id="pIncomeTotal" style="font-size:16px;color:var(--green)">0 ₽</div>
+      </div>
+    </div>
+
+    <!-- ОБЯЗАТЕЛЬНОЕ -->
+    <div class="admin-block" style="flex-direction:column;gap:0;padding:0;overflow:hidden;margin-top:20px">
+      <div style="padding:14px 24px;background:#fff3f3;border-bottom:1.5px solid #f6d5d5;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
+        <div>
+          <div style="font-size:13px;font-weight:700;color:var(--gray-900)">🔴 Обязательное</div>
+          <div style="font-size:11px;color:var(--gray-500);margin-top:1px">Еда, дом, семья — то, что не режется.</div>
+        </div>
+        <button onclick="pAddRow('fixed')" style="font-size:11px;font-family:var(--font);border:1px solid var(--gray-200);background:#fff;border-radius:10px;padding:4px 10px;cursor:pointer;color:var(--gray-600)">+ статья</button>
+      </div>
+      <div id="pFixedRows"></div>
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 24px;background:#fff3f3;border-top:2px solid #f6d5d5">
+        <div style="font-size:13px;font-weight:600;color:var(--gray-600)">Итого обязательное</div>
+        <div class="admin-item-value" id="pFixedTotal" style="font-size:16px">0 ₽</div>
+      </div>
+    </div>
+
+    <!-- ПЕРЕМЕННОЕ -->
+    <div class="admin-block" style="flex-direction:column;gap:0;padding:0;overflow:hidden;margin-top:20px">
+      <div style="padding:14px 24px;background:#fffaf0;border-bottom:1.5px solid #f2e6cc;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
+        <div>
+          <div style="font-size:13px;font-weight:700;color:var(--gray-900)">🟡 Переменное</div>
+          <div style="font-size:11px;color:var(--gray-500);margin-top:1px">Кафе, одежда, досуг — тут манёвр, когда туго.</div>
+        </div>
+        <button onclick="pAddRow('var')" style="font-size:11px;font-family:var(--font);border:1px solid var(--gray-200);background:#fff;border-radius:10px;padding:4px 10px;cursor:pointer;color:var(--gray-600)">+ статья</button>
+      </div>
+      <div id="pVarRows"></div>
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 24px;background:#fffaf0;border-top:2px solid #f2e6cc">
+        <div style="font-size:13px;font-weight:600;color:var(--gray-600)">Итого переменное</div>
+        <div class="admin-item-value" id="pVarTotal" style="font-size:16px">0 ₽</div>
+      </div>
+    </div>
+  </div><!-- /tab-personal -->
 
 </div>
 
@@ -1613,6 +1705,8 @@ function render() {
 
   // Свободно на руки = остаток − резерв 20% − плановый взнос в Фонд Лета
   const freeCash = remainder - sumActual;
+  window.__freeCash = freeCash;   // доход для вкладки «Мои деньги»
+  if (typeof renderPersonal === 'function' && !document.getElementById('tab-personal').hidden) renderPersonal();
   document.getElementById('freeAmt').textContent = fmt(freeCash);
   document.getElementById('freeAmt').style.color = freeCash >= 0 ? 'var(--green)' : 'var(--red)';
   document.getElementById('freeSub').textContent = freeCash >= 0
@@ -2848,6 +2942,85 @@ function closeBigBenOverlay(e) { if (e.target.id === 'bigbenModal') closeBigBenM
     applyBigBen(list);
   } catch (e) { alert('Не смог прочитать данные из ссылки: ' + e.message); }
 })();
+
+
+// ===================== ЛИЧНЫЙ БЮДЖЕТ =====================
+let personalState = JSON.parse(localStorage.getItem('ss_personal') || '{}');
+function savePersonal() { localStorage.setItem('ss_personal', JSON.stringify(personalState)); }
+const P_DEFAULTS = {
+  income: [{ name: 'Аренда квартиры 1', sum: 0 }, { name: 'Аренда квартиры 2', sum: 0 }, { name: 'Возврат долга', sum: 0 }, { name: 'Перевод мужа', sum: 0 }],
+  fixed:  [{ name: 'Продукты', sum: 0 }, { name: 'Семья (мама, брат)', sum: 0 }, { name: 'Дом, коммуналка', sum: 0 }, { name: 'Дети', sum: 0 }, { name: 'Транспорт', sum: 0 }],
+  var:    [{ name: 'Кафе, досуг', sum: 0 }, { name: 'Одежда', sum: 0 }, { name: 'Здоровье', sum: 0 }, { name: 'Разное', sum: 0 }],
+};
+function pMonth() {
+  const ym = (picker && picker.value) || '';
+  if (!personalState[ym]) personalState[ym] = JSON.parse(JSON.stringify(P_DEFAULTS));
+  return personalState[ym];
+}
+function pSum(arr) { return (arr || []).reduce((a, r) => a + (+r.sum || 0), 0); }
+function pAddRow(cat) {
+  const m = pMonth();
+  const name = prompt('Название статьи:', '');
+  if (name === null) return;
+  m[cat].push({ name: name.trim() || 'Без названия', sum: 0 });
+  savePersonal(); renderPersonal();
+}
+function pRenameRow(cat, i, val) { pMonth()[cat][i].name = val; savePersonal(); }
+function pSumRow(cat, i, val) {
+  const n = parseInt(String(val).replace(/[^0-9]/g, ''), 10);
+  pMonth()[cat][i].sum = isNaN(n) ? 0 : n;
+  savePersonal(); renderPersonal();
+}
+function pDelRow(cat, i) { pMonth()[cat].splice(i, 1); savePersonal(); renderPersonal(); }
+
+function pRowsHtml(cat, arr) {
+  return arr.map(function (r, i) {
+    return '<div class="p-row">'
+      + '<input class="p-name" value="' + (r.name || '').replace(/"/g, '&quot;') + '" onchange="pRenameRow(\'' + cat + '\',' + i + ',this.value)">'
+      + '<input class="p-sum" inputmode="numeric" value="' + (r.sum ? fmt(r.sum).replace(' ₽', '') : '') + '" placeholder="0" onchange="pSumRow(\'' + cat + '\',' + i + ',this.value)">'
+      + '<button class="p-del" title="Удалить" onclick="pDelRow(\'' + cat + '\',' + i + ')">✕</button></div>';
+  }).join('');
+}
+
+function renderPersonal() {
+  const m = pMonth();
+  const free = Math.max(0, window.__freeCash || 0);
+  const incomeExtra = pSum(m.income);
+  const income = free + incomeExtra;
+  const fixed = pSum(m.fixed);
+  const varr = pSum(m.var);
+  const spent = fixed + varr;
+  const left = income - spent;
+
+  document.getElementById('pFree').textContent = fmt(free);
+  document.getElementById('pIncomeRows').innerHTML = pRowsHtml('income', m.income);
+  document.getElementById('pIncomeTotal').textContent = fmt(income);
+  document.getElementById('pFixedRows').innerHTML = pRowsHtml('fixed', m.fixed);
+  document.getElementById('pVarRows').innerHTML = pRowsHtml('var', m.var);
+  document.getElementById('pFixedTotal').textContent = fmt(fixed);
+  document.getElementById('pVarTotal').textContent = fmt(varr);
+
+  document.getElementById('pIncome').textContent = fmt(income);
+  document.getElementById('pSpent').textContent = fmt(spent);
+  document.getElementById('pSpentSub').textContent = 'обязательное ' + fmt(fixed) + ' + переменное ' + fmt(varr);
+  const lf = document.getElementById('pLeft');
+  lf.textContent = fmt(left);
+  lf.className = 'card-value ' + (left >= 0 ? 'green' : '');
+  lf.style.color = left >= 0 ? '' : 'var(--red, #c00)';
+  document.getElementById('pLeftSub').textContent = left >= 0 ? 'можно потратить или отложить' : 'перерасход — ужми переменное';
+}
+
+function switchTab(name) {
+  const salary = name === 'salary';
+  document.getElementById('tab-salary').hidden = !salary;
+  document.getElementById('tab-personal').hidden = salary;
+  document.getElementById('tabBtnSalary').classList.toggle('active', salary);
+  document.getElementById('tabBtnPersonal').classList.toggle('active', !salary);
+  localStorage.setItem('ss_active_tab', name);
+  if (!salary) renderPersonal();
+}
+// восстановить выбранную вкладку
+if (localStorage.getItem('ss_active_tab') === 'personal') switchTab('personal');
 
 </script>
 </body>
