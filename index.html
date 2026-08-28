@@ -662,6 +662,14 @@
       background:none;white-space:nowrap;transition:all 0.15s;">
       ⬇️ Из BigBen
     </button>
+    <button onclick="document.getElementById('csvInput').click()" style="
+      font-family:var(--font);font-size:12px;font-weight:600;
+      padding:7px 14px;border-radius:20px;cursor:pointer;
+      border:1.5px solid var(--green);color:var(--green);
+      background:none;white-space:nowrap;transition:all 0.15s;">
+      📁 Оплаты из CRM
+    </button>
+    <input type="file" id="csvInput" accept=".csv" multiple style="display:none" onchange="loadFinanceCsv(this.files)">
   </div>
 
   <!-- ВКЛАДКИ -->
@@ -674,9 +682,19 @@
   <!-- SUMMARY CARDS -->
   <div class="summary-grid">
     <div class="card">
-      <div class="card-label">Выручка школы</div>
+      <div class="card-label">Выручка школы <span style="font-size:9px;color:var(--gray-400)">начислено</span></div>
       <div class="card-value purple" id="totalRevenue">0 ₽</div>
       <div class="card-sub" id="totalPupils">0 учеников</div>
+    </div>
+    <div class="card">
+      <div class="card-label">💵 Реально пришло <span style="font-size:9px;color:var(--gray-400)">касса за месяц</span></div>
+      <div class="card-value green" id="cashReal">—</div>
+      <div class="card-sub" id="cashSub">оплаты из CRM</div>
+    </div>
+    <div class="card">
+      <div class="card-label">🧾 Расходы факт</div>
+      <div class="card-value" id="spentReal" style="color:var(--red,#c00)">—</div>
+      <div class="card-sub" id="spentSub">из CRM</div>
     </div>
     <div class="card">
       <div class="card-label">ФОТ педагогов (25%)</div>
@@ -1544,6 +1562,53 @@ function calcGroup(i) {
   return { revenue, fot, hands: Math.max(0, hands), deposit: DEPOSIT };
 }
 
+function csvSumByMonth(text){
+  const out={};
+  const lines=text.split(/\r?\n/);
+  for(let i=1;i<lines.length;i++){
+    const line=lines[i]; if(!line) continue;
+    const cells=line.match(/("([^"]|"")*"|[^;]*)(;|$)/g);
+    if(!cells||cells.length<6) continue;
+    const date=cells[0].replace(/[";]/g,'').trim();
+    const m=date.match(/^(\d{2})\.(\d{2})\.(\d{4})/); if(!m) continue;
+    const ym=m[3]+'-'+m[2];
+    const sum=parseFloat(cells[4].replace(/[";\s]/g,'').replace(',','.'));
+    if(!isNaN(sum)) out[ym]=(out[ym]||0)+sum;
+  }
+  return out;
+}
+async function loadFinanceCsv(files){
+  let cashLoaded=false, spentLoaded=false, msg=[];
+  for(const f of files){
+    const buf=await f.arrayBuffer();
+    let text; try{ text=new TextDecoder('windows-1251').decode(buf); }catch(e){ text=new TextDecoder().decode(buf); }
+    const isIncome=/income|доход/i.test(f.name) || /Оплата обучения/i.test(text.slice(0,500));
+    const sums=csvSumByMonth(text);
+    if(isIncome){ localStorage.setItem('ss_cash',JSON.stringify(sums)); cashLoaded=true; msg.push('доходы: '+Object.keys(sums).length+' мес'); }
+    else { localStorage.setItem('ss_spent',JSON.stringify(sums)); spentLoaded=true; msg.push('расходы: '+Object.keys(sums).length+' мес'); }
+  }
+  renderFinance();
+  alert('Загружено — '+msg.join(', ')+'. Смотри карточки «Реально пришло» и «Расходы факт».');
+}
+
+function renderFinance() {
+  let cash={}, spent={};
+  try { cash=JSON.parse(localStorage.getItem('ss_cash')||'{}'); } catch(e){}
+  try { spent=JSON.parse(localStorage.getItem('ss_spent')||'{}'); } catch(e){}
+  const ym = picker.value;
+  const c = cash[ym], sp = spent[ym];
+  const ce=document.getElementById('cashReal'); if(ce){ ce.textContent = c!=null?fmt(Math.round(c)):'—'; }
+  const se=document.getElementById('spentReal'); if(se){ se.textContent = sp!=null?fmt(Math.round(sp)):'—'; }
+  const cs=document.getElementById('cashSub');
+  if(cs){
+    const rev = (lastTotals && lastTotals.revenue) || 0;
+    if(c!=null && rev){
+      const diff = rev - Math.round(c);
+      cs.textContent = diff>0 ? 'ещё не в кассе: '+fmt(diff) : 'пришло больше начисленного';
+    } else cs.textContent = 'оплаты из CRM';
+  }
+}
+
 function render() {
   const teachers = [...new Set(GROUPS.map(g => g.teacher))];
 
@@ -1707,6 +1772,7 @@ function render() {
 
   // Свободно на руки = остаток − резерв 20% − плановый взнос в Фонд Лета
   const freeCash = remainder - sumActual;
+  renderFinance();
   window.__freeCash = freeCash;   // доход для вкладки «Мои деньги»
   try { const fc = JSON.parse(localStorage.getItem('ss_free_cash') || '{}'); fc[picker.value] = Math.max(0, Math.round(freeCash)); localStorage.setItem('ss_free_cash', JSON.stringify(fc)); } catch(e) {}
   pushSchoolToFamily(picker.value, Math.max(0, Math.round(freeCash)));
@@ -2836,6 +2902,8 @@ async function bbServerRefresh() {
     if (!d.ok) throw new Error(d.error || 'сервер отказал');
     localStorage.setItem('bbToken', token);
     applyBigBen(d.list);
+    try { if (d.cash) localStorage.setItem('ss_cash', JSON.stringify(d.cash)); if (d.spent) localStorage.setItem('ss_spent', JSON.stringify(d.spent)); } catch(e) {}
+    renderFinance();
     if (d.cached && d.at) {
       const dt = new Date(d.at);
       const when = isNaN(dt) ? '' : dt.toLocaleString('ru-RU', { day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' });
