@@ -1155,7 +1155,7 @@ let premiumState = JSON.parse(localStorage.getItem('ss_premium') || 'null') || J
 function savePremiumState() { localStorage.setItem('ss_premium', JSON.stringify(premiumState)); }
 
 function calcPremiumFund(teacher) {
-  const tGroups = GROUPS.filter(g => g.teacher === teacher);
+  const tGroups = GROUPS.filter((g, i) => g.teacher === teacher && !(state.inactive && state.inactive[i]));
   return tGroups.length * 2500 * 9; // 2500/group × 9 months
 }
 
@@ -2500,7 +2500,7 @@ function openSlip(teacher) {
   const monthName = monthNames[parseInt(m) - 1];
   const period = monthName.charAt(0).toUpperCase() + monthName.slice(1) + ' ' + y;
 
-  const tGroups = GROUPS.map((g, i) => ({ ...g, i })).filter(g => g.teacher === teacher);
+  const tGroups = GROUPS.map((g, i) => ({ ...g, i })).filter(g => g.teacher === teacher && !(state.inactive && state.inactive[g.i]));
   let tRevenue = 0, tFot = 0, tHands = 0, tDeposit = 0, tPupils = 0;
 
   tGroups.forEach(g => {
@@ -2603,7 +2603,7 @@ function printSlip() {
   const period = monthName.charAt(0).toUpperCase() + monthName.slice(1) + ' ' + y;
   const monthNum = m + '.' + y;
 
-  const tGroups = GROUPS.map((g, i) => ({...g, i})).filter(g => g.teacher === teacher);
+  const tGroups = GROUPS.map((g, i) => ({...g, i})).filter(g => g.teacher === teacher && !(state.inactive && state.inactive[g.i]));
   let tRevenue = 0, tFot = 0, tHands = 0, tDeposit = 0;
   tGroups.forEach(g => {
     const c = calcGroup(g.i);
@@ -2717,7 +2717,7 @@ function copySlip() {
   const teacher = currentSlipTeacher;
   const period = document.querySelector('.slip-period')?.textContent || '';
 
-  const tGroups = GROUPS.map((g, i) => ({ ...g, i })).filter(g => g.teacher === teacher);
+  const tGroups = GROUPS.map((g, i) => ({ ...g, i })).filter(g => g.teacher === teacher && !(state.inactive && state.inactive[g.i]));
   let tFot = 0, tHands = 0, tDeposit = 0;
   let lines = [`Расчётный лист · Speak&Smile\n${teacher} · ${period}\n`];
   lines.push('─'.repeat(44));
