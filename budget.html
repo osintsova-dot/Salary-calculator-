@@ -80,8 +80,9 @@ header{background:linear-gradient(135deg,var(--p),var(--p2));color:#fff;padding:
 <div id="hello" style="margin:16px;background:#fff;border:1.5px dashed var(--line);border-radius:16px;padding:14px 16px;font-size:13px;color:var(--mut);display:none">👋 Привет! Нажми «я: выбрать» вверху и впиши своё имя, задай общий «код семьи» — и добавляй доходы и траты кнопками внизу.</div>
 
 <div class="balance">
-  <div class="lbl">Остаток в этом месяце</div>
+  <div class="lbl">💳 Остаток на счетах</div>
   <div class="val" id="balVal">0 ₽</div>
+  <div class="carry" id="carryLine" style="font-size:12px;color:var(--mut);margin-top:2px">&nbsp;</div>
   <div class="split">
     <span>Доход <b class="in" id="inTot">0 ₽</b></span>
     <span>Траты <b class="out" id="outTot">0 ₽</b></span>
@@ -194,6 +195,15 @@ month.value=(new Date().toISOString().slice(0,7));
 
 function ym(){return month.value;}
 function monthEntries(){return data.entries.filter(e=>e.month===ym()&&!e.deleted);}
+// Остаток, накопленный за ВСЕ прошлые месяцы (переносится вперёд как деньги на счетах).
+// Считается на лету из истории — в синхронизацию ничего лишнего не пишется.
+function carryover(){
+  const cur=ym();
+  return data.entries.reduce((a,e)=>{
+    if(e.deleted||!e.month||e.month>=cur) return a;
+    return a+(e.kind==='income'?e.sum:-e.sum);
+  },0);
+}
 
 function render(){
   const hb=document.getElementById('hello'); if(hb) hb.style.display=(me&&code)?'none':'block';
@@ -202,8 +212,14 @@ function render(){
   const es=monthEntries();
   const inc=es.filter(e=>e.kind==='income'), exp=es.filter(e=>e.kind==='expense');
   const inTot=inc.reduce((a,e)=>a+e.sum,0), outTot=exp.reduce((a,e)=>a+e.sum,0);
-  const bal=inTot-outTot;
+  const carry=carryover();
+  const bal=carry+inTot-outTot;              // деньги на счетах: перенос + доход − траты
   $('inTot').textContent=fmt(inTot); $('outTot').textContent=fmt(outTot);
+  const cl=$('carryLine');
+  if(cl){
+    const sign=carry>0?'+':(carry<0?'−':'');
+    cl.textContent='⏭️ с прошлых месяцев: '+sign+fmt(Math.abs(carry));
+  }
   const bv=$('balVal'); bv.textContent=fmt(bal); bv.className='val '+(bal>=0?'pos':'neg');
   $('inCount').textContent=inc.length?inc.length+' шт':''; $('outCount').textContent=exp.length?exp.length+' шт':'';
   $('incomeList').innerHTML=inc.length?inc.map(rowHtml).join(''):'<div class="empty">Пока нет доходов. Нажми «+ Доход».</div>';
