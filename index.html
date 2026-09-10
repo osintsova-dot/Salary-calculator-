@@ -2795,14 +2795,16 @@ function applyBigBen(rawList) {
       const price = TARIFF[GROUPS[i].dur];
       const pcts = cell[3];
       let rub = null;
-      if (pcts && typeof pcts === 'object') {
-        // считаем от нашей фиксированной цены со скидкой каждого ученика —
-        // не зависит от того, 8 или 9 занятий выпало на месяц
+      if (cell[0] != null && !isNaN(+cell[0])) {
+        // РЕАЛЬНАЯ «К оплате» из BigBen — сколько родители реально платят с учётом
+        // ВСЕХ скидок, включая длинные абонементы (9/6/3 мес). BigBen размазывает
+        // абонемент по месяцам, так что это точная месячная сумма. ЗП считаем от неё.
+        rub = Math.round(+cell[0]);
+      } else if (pcts && typeof pcts === 'object') {
+        // запасной вариант, если BigBen не отдал сумму: тариф × скидка % каждого ученика
         rub = 0;
         Object.entries(pcts).forEach(([pc, cnt]) => { rub += price * (1 - (+pc) / 100) * (+cnt); });
         rub = Math.round(rub);
-      } else if (!isNaN(+cell[0])) {
-        rub = Math.round(+cell[0]);
       }
       if (rub !== null) {
         state.crmRev[i] = rub;
