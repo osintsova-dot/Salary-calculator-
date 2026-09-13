@@ -46,6 +46,10 @@ header .sub{font-size:12px;opacity:.9;margin-top:3px}
 .pay .plsub{font-size:11px;color:var(--mut)}
 .pay .amt{font-family:var(--mono);font-weight:800;font-size:15px;flex:none}
 .pay.ok .amt{color:var(--green)}.pay.no .amt{color:var(--mut)}
+.mhd{display:flex;align-items:baseline;justify-content:space-between;gap:10px;margin:16px 2px 8px;padding-bottom:6px;border-bottom:2px solid var(--p)}
+.mhd .mnm{font-size:16px;font-weight:800;text-transform:capitalize;color:var(--p)}
+.mhd .msum{font-family:var(--mono);font-size:17px;font-weight:800}
+.mhd:first-child{margin-top:2px}
 .paytot{margin-top:12px;padding:14px;background:linear-gradient(135deg,var(--p),var(--p2));color:#fff;border-radius:14px;text-align:center}
 .paytot .v{font-family:var(--mono);font-size:26px;font-weight:800}
 .paytot .l{font-size:12px;opacity:.9}
@@ -164,25 +168,36 @@ function renderLists(){
   });
 }
 
+var MONTHS=["январь","февраль","март","апрель","май","июнь","июль","август","сентябрь","октябрь","ноябрь","декабрь"];
+function monthName(ym){var p=ym.split("-");return MONTHS[+p[1]-1]+" "+p[0];}
 function renderPay(){
   var pane=document.getElementById("paneP");pane.textContent="";
   if(!DATA){return;}
   var pl=(DATA.payLessons||[]).slice();
-  if(!pl.length){pane.appendChild(el("div",{class:"empty",text:"Отработок за период пока нет"}));return;}
-  var RATE=1500,tot=0;
-  pane.appendChild(el("div",{class:"total"},[document.createTextNode("Ставка Инги: "),el("b",{text:"1 500 ₽ за проведённый урок"})]));
-  pl.forEach(function(p){
-    var ok=p.conducted;if(ok)tot+=RATE;
-    pane.appendChild(el("div",{class:"pay "+(ok?"ok":"no")},[
-      el("div",{class:"d",text:fmtDate(p.date)}),
-      el("div",{class:"pl"},[document.createTextNode(p.label),el("div",{class:"plsub",text:ok?("пришло: "+p.attendees):"никто не пришёл / не отмечено"})]),
-      el("div",{class:"amt",text:ok?"1 500 ₽":"—"})
+  if(!pl.length){pane.appendChild(el("div",{class:"empty",text:"Отработок пока нет"}));return;}
+  var RATE=1500;
+  pane.appendChild(el("div",{class:"total"},[document.createTextNode("Ставка Инги: "),el("b",{text:"1 500 ₽ за проведённую отработку"})]));
+  // группировка по месяцам, новый месяц сверху
+  var byM={};
+  pl.forEach(function(p){var ym=(p.date||"").slice(0,7);(byM[ym]=byM[ym]||[]).push(p);});
+  var months=Object.keys(byM).sort().reverse();
+  months.forEach(function(ym){
+    var rows=byM[ym].slice().sort(function(a,b){return (a.date+a.lk).localeCompare(b.date+b.lk);});
+    var mTot=0;
+    rows.forEach(function(p){if(p.conducted)mTot+=RATE;});
+    pane.appendChild(el("div",{class:"mhd"},[
+      el("div",{class:"mnm",text:monthName(ym)}),
+      el("div",{class:"msum",text:mTot.toLocaleString("ru-RU")+" ₽"})
     ]));
+    rows.forEach(function(p){
+      var ok=p.conducted;
+      pane.appendChild(el("div",{class:"pay "+(ok?"ok":"no")},[
+        el("div",{class:"d",text:fmtDate(p.date)}),
+        el("div",{class:"pl"},[document.createTextNode(p.label),el("div",{class:"plsub",text:ok?("пришло: "+p.attendees):"не состоялась / не отмечено"})]),
+        el("div",{class:"amt",text:ok?"1 500 ₽":"—"})
+      ]));
+    });
   });
-  var box=el("div",{class:"paytot"});
-  box.appendChild(el("div",{class:"v",text:tot.toLocaleString("ru-RU")+" ₽"}));
-  box.appendChild(el("div",{class:"l",text:"к оплате Инге за период ("+pl.filter(function(p){return p.conducted;}).length+" уроков × 1 500)"}));
-  pane.appendChild(box);
 }
 
 boot();
