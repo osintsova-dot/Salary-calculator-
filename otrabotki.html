@@ -1,0 +1,184 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<meta name="theme-color" content="#6C3FC5">
+<title>Отработки · Speak&Smile</title>
+<style>
+:root{--p:#6C3FC5;--p2:#8B5CF6;--gold:#F5C842;--ink:#1A1A2E;--mut:#6b6785;--line:#e7e2f2;--bg:#f6f4fb;--card:#fff;--green:#16A34A;--red:#DC2626;
+  --font:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;--mono:ui-monospace,Menlo,monospace}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+body{margin:0;font-family:var(--font);color:var(--ink);background:var(--bg);font-size:16px;padding-bottom:40px}
+header{background:linear-gradient(135deg,var(--p),var(--p2));color:#fff;padding:16px}
+header h1{margin:0;font-size:19px;font-weight:800}
+header .sub{font-size:12px;opacity:.9;margin-top:3px}
+.tabs{display:flex;gap:8px;margin:14px 14px 0}
+.tabs button{flex:1;border:none;border-radius:14px 14px 0 0;padding:12px;font-family:var(--font);font-size:14px;font-weight:800;cursor:pointer;background:#e9e3f6;color:var(--mut)}
+.tabs button.on{background:var(--card);color:var(--p)}
+.wrap{padding:0 14px}
+.pane{background:var(--card);border-radius:0 0 16px 16px;padding:12px;min-height:40vh}
+.total{font-size:13px;color:var(--mut);margin:2px 0 12px}
+.total b{color:var(--ink)}
+
+.slot{border:1px solid var(--line);border-radius:14px;margin-bottom:10px;overflow:hidden}
+.slot>.hd{display:flex;align-items:center;gap:10px;padding:13px 14px;cursor:pointer;background:#faf8ff}
+.slot .lbl{font-weight:800;font-size:15px;flex:1}
+.badge{min-width:26px;height:26px;padding:0 8px;border-radius:20px;background:var(--p);color:#fff;font-size:13px;font-weight:800;display:flex;align-items:center;justify-content:center}
+.badge.come{background:var(--green)}
+.chev{color:var(--mut);font-size:13px}
+.slot .body{display:none;padding:4px 0 8px}
+.slot.open .body{display:block}
+
+.stu{display:flex;align-items:center;gap:8px;padding:10px 14px;border-top:1px solid var(--line)}
+.stu .mid{flex:1;min-width:0}
+.stu .nm{font-size:14px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.stu .meta{font-size:11px;color:var(--mut)}
+.stu .btns{display:flex;gap:5px;flex:none}
+.mbtn{border:1.5px solid var(--line);background:#fff;border-radius:10px;padding:7px 10px;font-family:var(--font);font-size:12px;font-weight:700;cursor:pointer;color:var(--mut)}
+.mbtn.come.on{background:var(--green);border-color:var(--green);color:#fff}
+.mbtn.no.on{background:var(--mut);border-color:var(--mut);color:#fff}
+
+.pay{display:flex;align-items:center;gap:10px;border:1px solid var(--line);border-radius:12px;padding:11px 13px;margin-bottom:8px}
+.pay .d{font-family:var(--mono);font-size:13px;font-weight:700;color:var(--p);flex:none;width:52px}
+.pay .pl{flex:1;font-size:14px;font-weight:600}
+.pay .plsub{font-size:11px;color:var(--mut)}
+.pay .amt{font-family:var(--mono);font-weight:800;font-size:15px;flex:none}
+.pay.ok .amt{color:var(--green)}.pay.no .amt{color:var(--mut)}
+.paytot{margin-top:12px;padding:14px;background:linear-gradient(135deg,var(--p),var(--p2));color:#fff;border-radius:14px;text-align:center}
+.paytot .v{font-family:var(--mono);font-size:26px;font-weight:800}
+.paytot .l{font-size:12px;opacity:.9}
+
+.empty{color:var(--mut);font-size:13px;text-align:center;padding:24px}
+.gate{margin:40px 16px;background:var(--card);border-radius:16px;padding:22px;text-align:center}
+.gate input{width:100%;font-size:18px;text-align:center;font-family:var(--mono);border:1.5px solid var(--line);border-radius:12px;padding:12px;margin:12px 0}
+.gate button{background:var(--p);color:#fff;border:none;border-radius:12px;padding:13px 22px;font-weight:800;font-size:15px;cursor:pointer}
+.foot{text-align:center;color:var(--mut);font-size:12px;margin-top:16px}
+.refresh{background:none;border:1px solid rgba(255,255,255,.4);color:#fff;border-radius:20px;padding:5px 12px;font-size:12px;font-weight:700;cursor:pointer}
+</style>
+</head>
+<body>
+
+<div id="gate" class="gate" hidden>
+  <div style="font-size:16px;font-weight:800;margin-bottom:4px">🔁 Отработки</div>
+  <div style="font-size:13px;color:var(--mut)">Введите код доступа</div>
+  <input id="code" inputmode="text" autocapitalize="none" autocomplete="off" placeholder="код">
+  <div><button onclick="saveCode()">Войти</button></div>
+</div>
+
+<div id="app" hidden>
+  <header>
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:10px">
+      <div>
+        <h1>🔁 Отработки</h1>
+        <div class="sub" id="dataAt">…</div>
+      </div>
+      <button class="refresh" onclick="load()">Обновить</button>
+    </div>
+  </header>
+  <div class="tabs">
+    <button id="tabL" class="on" onclick="showTab('L')">📋 Списки (обзвон)</button>
+    <button id="tabP" onclick="showTab('P')">💰 Оплата</button>
+  </div>
+  <div class="wrap">
+    <div id="paneL" class="pane"></div>
+    <div id="paneP" class="pane" hidden></div>
+    <div class="foot">Speak&amp;Smile · отработки · педагог Инга. «Был» отмечается в BigBen, тут — обзвон и оплата.</div>
+  </div>
+</div>
+
+<script>
+"use strict";
+var WORKER="https://ss-bb.o-sintsova.workers.dev";
+var el=function(t,p,kids){var e=document.createElement(t);if(p)for(var k in p){if(k==="class")e.className=p[k];else if(k==="text")e.textContent=p[k];else if(k.slice(0,2)==="on")e[k.toLowerCase()]=p[k];else e.setAttribute(k,p[k]);}(kids||[]).forEach(function(c){if(c)e.appendChild(c);});return e;};
+var DATA=null, MARKS={};
+function token(){return localStorage.getItem("bbToken")||"";}
+function fmtDate(s){if(!s)return"";var p=s.split("-");return p[2]+"."+p[1];}
+function fmtDT(s){try{var d=new Date(s);return d.toLocaleString("ru-RU",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"});}catch(e){return"";}}
+
+function saveCode(){var v=document.getElementById("code").value.trim();if(v){localStorage.setItem("bbToken",v);boot();}}
+function boot(){
+  if(!token()){document.getElementById("gate").hidden=false;document.getElementById("app").hidden=true;return;}
+  document.getElementById("gate").hidden=true;document.getElementById("app").hidden=false;load();
+}
+function load(){
+  document.getElementById("paneL").textContent="Загрузка…";
+  fetch(WORKER+"/otr-data?t="+encodeURIComponent(token()),{cache:"no-store"})
+    .then(function(r){return r.json();})
+    .then(function(d){
+      if(!d.ok){document.getElementById("paneL").textContent=(d.error||"ошибка")+" — проверьте код";return;}
+      DATA=d;MARKS=d.marks||{};
+      document.getElementById("dataAt").textContent = d.at?("данные на "+fmtDT(d.at)):"нет данных — сбор ещё не запускался";
+      renderLists();renderPay();
+    })
+    .catch(function(){document.getElementById("paneL").textContent="нет связи с сервером";});
+}
+function showTab(t){
+  document.getElementById("tabL").className=t==="L"?"on":"";
+  document.getElementById("tabP").className=t==="P"?"on":"";
+  document.getElementById("paneL").hidden=t!=="L";
+  document.getElementById("paneP").hidden=t!=="P";
+}
+
+function mark(uid,m){
+  var cur=MARKS[uid]===m?"clear":m;
+  MARKS[uid]=cur==="clear"?undefined:cur;
+  fetch(WORKER+"/otr-mark?t="+encodeURIComponent(token())+"&uid="+uid+"&mark="+(cur==="clear"?"clear":cur),{cache:"no-store"});
+  renderLists();
+}
+
+function renderLists(){
+  var pane=document.getElementById("paneL");pane.textContent="";
+  if(!DATA){pane.textContent="…";return;}
+  var q=DATA.queue||{}, order=DATA.order||Object.keys(q), labels=DATA.labels||{};
+  var levels=order.filter(function(lk){return q[lk]&&q[lk].length;});
+  var total=0,come=0;
+  levels.forEach(function(lk){q[lk].forEach(function(s){total++;if(MARKS[s.user_id]==="come")come++;});});
+  if(!total){pane.appendChild(el("div",{class:"empty",text:"Очередь пуста — все отработали или пропусков нет 🎉"}));return;}
+  pane.appendChild(el("div",{class:"total"},[document.createTextNode("В очереди на отработку: "),el("b",{text:String(total)}),document.createTextNode("  ·  подтвердили «придёт»: "),el("b",{text:String(come)})]));
+  levels.forEach(function(lk){
+    var list=q[lk];
+    var comeN=list.filter(function(s){return MARKS[s.user_id]==="come";}).length;
+    var body=el("div",{class:"body"});
+    list.forEach(function(s){
+      var cm=MARKS[s.user_id];
+      var bCome=el("button",{class:"mbtn come"+(cm==="come"?" on":""),text:"придёт",onClick:function(){mark(s.user_id,"come");}});
+      var bNo=el("button",{class:"mbtn no"+(cm==="no"?" on":""),text:"не придёт",onClick:function(){mark(s.user_id,"no");}});
+      body.appendChild(el("div",{class:"stu"},[
+        el("div",{class:"mid"},[el("div",{class:"nm",text:s.fio}),el("div",{class:"meta",text:s.group+" · пропустил "+fmtDate(s.date)})]),
+        el("div",{class:"btns"},[bCome,bNo])
+      ]));
+    });
+    var badge=el("div",{class:"badge"+(comeN?" come":""),text:comeN?comeN+"/"+list.length:String(list.length)});
+    var hd=el("div",{class:"hd"},[el("div",{class:"lbl",text:labels[lk]||lk}),badge,el("div",{class:"chev",text:"▾"})]);
+    var slot=el("div",{class:"slot"},[hd,body]);
+    hd.onclick=function(){slot.className=slot.className.indexOf("open")<0?"slot open":"slot";};
+    pane.appendChild(slot);
+  });
+}
+
+function renderPay(){
+  var pane=document.getElementById("paneP");pane.textContent="";
+  if(!DATA){return;}
+  var pl=(DATA.payLessons||[]).slice();
+  if(!pl.length){pane.appendChild(el("div",{class:"empty",text:"Отработок за период пока нет"}));return;}
+  var RATE=1500,tot=0;
+  pane.appendChild(el("div",{class:"total"},[document.createTextNode("Ставка Инги: "),el("b",{text:"1 500 ₽ за проведённый урок"})]));
+  pl.forEach(function(p){
+    var ok=p.conducted;if(ok)tot+=RATE;
+    pane.appendChild(el("div",{class:"pay "+(ok?"ok":"no")},[
+      el("div",{class:"d",text:fmtDate(p.date)}),
+      el("div",{class:"pl"},[document.createTextNode(p.label),el("div",{class:"plsub",text:ok?("пришло: "+p.attendees):"никто не пришёл / не отмечено"})]),
+      el("div",{class:"amt",text:ok?"1 500 ₽":"—"})
+    ]));
+  });
+  var box=el("div",{class:"paytot"});
+  box.appendChild(el("div",{class:"v",text:tot.toLocaleString("ru-RU")+" ₽"}));
+  box.appendChild(el("div",{class:"l",text:"к оплате Инге за период ("+pl.filter(function(p){return p.conducted;}).length+" уроков × 1 500)"}));
+  pane.appendChild(box);
+}
+
+boot();
+</script>
+</body>
+</html>
