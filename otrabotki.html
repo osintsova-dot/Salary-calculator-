@@ -32,8 +32,9 @@ header .sub{font-size:12px;opacity:.9;margin-top:3px}
 
 .stu{display:flex;align-items:center;gap:8px;padding:10px 14px;border-top:1px solid var(--line)}
 .stu .mid{flex:1;min-width:0}
-.stu .nm{font-size:14px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.stu .nm .cnt{display:inline-block;margin-left:6px;background:var(--gold);color:var(--ink);border-radius:8px;padding:1px 6px;font-size:11px;font-weight:800;vertical-align:middle}
+.stu .nm{font-size:14px;font-weight:700;display:flex;align-items:center;gap:6px}
+.stu .nm .nmtext{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+.stu .nm .cnt{flex:none;background:var(--gold);color:var(--ink);border-radius:8px;padding:1px 6px;font-size:11px;font-weight:800}
 .stu .meta{font-size:11px;color:var(--mut)}
 .stu .btns{display:flex;gap:5px;flex:none}
 .mbtn{border:1.5px solid var(--line);background:#fff;border-radius:10px;padding:7px 10px;font-family:var(--font);font-size:12px;font-weight:700;cursor:pointer;color:var(--mut)}
@@ -153,7 +154,7 @@ function renderLists(){
       var n=ds.length;
       var datesStr=ds.map(fmtDate).join(", ");
       var missTxt=n>1?(n+" урока: "+datesStr):("пропустил "+datesStr);
-      var nm=el("div",{class:"nm"},[document.createTextNode(s.fio)]);
+      var nm=el("div",{class:"nm"},[el("span",{class:"nmtext",text:s.fio})]);
       if(n>1)nm.appendChild(el("span",{class:"cnt",text:"×"+n}));
       body.appendChild(el("div",{class:"stu"},[
         el("div",{class:"mid"},[nm,el("div",{class:"meta",text:s.group+" · "+missTxt})]),
