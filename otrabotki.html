@@ -170,13 +170,16 @@ function renderLists(){
 
 var MONTHS=["январь","февраль","март","апрель","май","июнь","июль","август","сентябрь","октябрь","ноябрь","декабрь"];
 function monthName(ym){var p=ym.split("-");return MONTHS[+p[1]-1]+" "+p[0];}
+// 90-минутные уровни (старшие): Get Involved, Prepare, Gateway → 2250 ₽; остальные 60 мин → 1500 ₽
+var OTR90={GI1:1,GI2:1,P3:1,P4:1,P5:1,GW:1};
+function rateFor(lk){return OTR90[lk]?2250:1500;}
+function rub(n){return n.toLocaleString("ru-RU")+" ₽";}
 function renderPay(){
   var pane=document.getElementById("paneP");pane.textContent="";
   if(!DATA){return;}
   var pl=(DATA.payLessons||[]).slice();
   if(!pl.length){pane.appendChild(el("div",{class:"empty",text:"Отработок пока нет"}));return;}
-  var RATE=1500;
-  pane.appendChild(el("div",{class:"total"},[document.createTextNode("Ставка Инги: "),el("b",{text:"1 500 ₽ за проведённую отработку"})]));
+  pane.appendChild(el("div",{class:"total"},[document.createTextNode("Ставка Инги: "),el("b",{text:"1 500 ₽ (60 мин) · 2 250 ₽ (90 мин)"})]));
   // группировка по месяцам, новый месяц сверху
   var byM={};
   pl.forEach(function(p){var ym=(p.date||"").slice(0,7);(byM[ym]=byM[ym]||[]).push(p);});
@@ -184,17 +187,17 @@ function renderPay(){
   months.forEach(function(ym){
     var rows=byM[ym].slice().sort(function(a,b){return (a.date+a.lk).localeCompare(b.date+b.lk);});
     var mTot=0;
-    rows.forEach(function(p){if(p.conducted)mTot+=RATE;});
+    rows.forEach(function(p){if(p.conducted)mTot+=rateFor(p.lk);});
     pane.appendChild(el("div",{class:"mhd"},[
       el("div",{class:"mnm",text:monthName(ym)}),
-      el("div",{class:"msum",text:mTot.toLocaleString("ru-RU")+" ₽"})
+      el("div",{class:"msum",text:rub(mTot)})
     ]));
     rows.forEach(function(p){
-      var ok=p.conducted;
+      var ok=p.conducted,r=rateFor(p.lk);
       pane.appendChild(el("div",{class:"pay "+(ok?"ok":"no")},[
         el("div",{class:"d",text:fmtDate(p.date)}),
-        el("div",{class:"pl"},[document.createTextNode(p.label),el("div",{class:"plsub",text:ok?("пришло: "+p.attendees):"не состоялась / не отмечено"})]),
-        el("div",{class:"amt",text:ok?"1 500 ₽":"—"})
+        el("div",{class:"pl"},[document.createTextNode(p.label),el("div",{class:"plsub",text:ok?("пришло: "+p.attendees+" · "+(r===2250?"90":"60")+" мин"):"не состоялась / не отмечено"})]),
+        el("div",{class:"amt",text:ok?rub(r):"—"})
       ]));
     });
   });
