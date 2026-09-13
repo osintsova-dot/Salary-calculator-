@@ -757,6 +757,21 @@
     <p id="potentialText"></p>
   </div>
 
+  <!-- ОТРАБОТКИ: ЭКОНОМИЯ vs ПЕРЕРАСЧЁТ (видит только владелец — Инга эту страницу не открывает) -->
+  <div class="admin-block" id="otrSavingsCard" style="flex-direction:column;gap:0;padding:0;overflow:hidden;display:none">
+    <div style="padding:14px 24px;background:var(--gray-50);border-bottom:1.5px solid var(--gray-100);display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap">
+      <div>
+        <div style="font-size:13px;font-weight:700;color:var(--gray-900)">💰 Экономия на отработках</div>
+        <div style="font-size:11px;color:var(--gray-400);margin-top:1px">формат отработок vs перерасчёт занятий · перерасчёт 1 000 ₽/урок (60 мин), 1 250 ₽/урок (90 мин)</div>
+      </div>
+      <div style="text-align:right">
+        <div id="otrSaveTotal" style="font-family:var(--mono);font-size:20px;font-weight:800;color:var(--green)">—</div>
+        <div style="font-size:11px;color:var(--gray-400)">сэкономлено всего</div>
+      </div>
+    </div>
+    <div id="otrSaveBody" style="padding:2px 0"></div>
+  </div>
+
   <!-- TEACHERS -->
   <div id="teachersContainer"></div>
 
@@ -1545,6 +1560,47 @@ async function fetchFinanceData(){
   }catch(e){}
 }
 
+// ЭКОНОМИЯ НА ОТРАБОТКАХ vs перерасчёт. Данные — из воркера (/otr-data, payLessons с полем closed).
+// Перерасчёт: 1000 ₽/урок (60 мин), 1250 ₽/урок (90 мин: Get Involved/Prepare/Gateway).
+// Экономия = закрыто_уроков×перерасчёт − оплата Инге (1500/2250 за сеанс). Видит только владелец.
+async function fetchOtrSavings(){
+  const token=localStorage.getItem('bbToken')||''; if(!token) return;
+  const card=document.getElementById('otrSavingsCard'); if(!card) return;
+  try{
+    const r=await fetch('https://ss-bb.o-sintsova.workers.dev/otr-data?t='+encodeURIComponent(token),{cache:'no-store'});
+    const d=await r.json();
+    if(!d || !d.ok || !Array.isArray(d.payLessons)) return;
+    const OTR90={GI1:1,GI2:1,P3:1,P4:1,P5:1,GW:1};
+    const perLesson=function(lk){return OTR90[lk]?1250:1000;};
+    const rate=function(lk){return OTR90[lk]?2250:1500;};
+    const MONTHS=['январь','февраль','март','апрель','май','июнь','июль','август','сентябрь','октябрь','ноябрь','декабрь'];
+    const byM={}; let gRefund=0,gInga=0,gClosed=0,gSlots=0;
+    d.payLessons.forEach(function(p){
+      if(!p.conducted) return;
+      const closed=(p.closed!=null)?p.closed:0;
+      const refund=closed*perLesson(p.lk), inga=rate(p.lk);
+      const ym=(p.date||'').slice(0,7);
+      const m=byM[ym]||(byM[ym]={refund:0,inga:0,closed:0,slots:0});
+      m.refund+=refund; m.inga+=inga; m.closed+=closed; m.slots++;
+      gRefund+=refund; gInga+=inga; gClosed+=closed; gSlots++;
+    });
+    if(gSlots===0 || gClosed===0){ card.style.display='none'; return; }  // ждём, пока сборщик посчитает closed
+    document.getElementById('otrSaveTotal').textContent=fmt(gRefund-gInga);
+    const months=Object.keys(byM).sort().reverse();
+    let html='';
+    months.forEach(function(ym){
+      const m=byM[ym], save=m.refund-m.inga;
+      const name=MONTHS[+ym.slice(5,7)-1]+' '+ym.slice(0,4);
+      html+='<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:11px 24px;border-bottom:1px solid var(--gray-100);flex-wrap:wrap">'
+        +'<div style="min-width:150px"><div style="font-size:13px;font-weight:600;color:var(--gray-900);text-transform:capitalize">'+name+'</div>'
+        +'<div style="font-size:11px;color:var(--gray-400)">'+m.slots+' отработок · закрыто '+m.closed+' уроков · перерасчёт был бы '+fmt(m.refund)+', Инге '+fmt(m.inga)+'</div></div>'
+        +'<div style="font-family:var(--mono);font-size:16px;font-weight:700;color:var(--green)">+'+fmt(save)+'</div></div>';
+    });
+    document.getElementById('otrSaveBody').innerHTML=html;
+    card.style.display='';
+  }catch(e){}
+}
+
 function renderFamilyLink(){
   const fc=(localStorage.getItem('ss_family_code')||'').trim();
   const on=localStorage.getItem('ss_send_school')==='1';
@@ -2006,6 +2062,7 @@ const picker = document.getElementById('monthPicker');
 const now = new Date();
 picker.value = localStorage.getItem('ss_last_month') || now.toISOString().slice(0, 7);
 setTimeout(fetchFinanceData, 100);
+setTimeout(fetchOtrSavings, 200);
 
 const monthNames = ['январь','февраль','март','апрель','май','июнь',
   'июль','август','сентябрь','октябрь','ноябрь','декабрь'];
@@ -2882,6 +2939,7 @@ async function bbServerRefresh() {
     applyBigBen(d.list);
     try { if (d.cash) localStorage.setItem('ss_cash', JSON.stringify(d.cash)); if (d.spent) localStorage.setItem('ss_spent', JSON.stringify(d.spent)); if (d.paidFor) localStorage.setItem('ss_paidfor', JSON.stringify(d.paidFor)); } catch(e) {}
     fetchFinanceData();
+    fetchOtrSavings();
     renderFinance();
     if (d.cached && d.at) {
       const dt = new Date(d.at);
