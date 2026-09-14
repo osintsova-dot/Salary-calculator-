@@ -850,7 +850,7 @@
       <div style="display:flex;align-items:center;padding:12px 24px">
         <div style="flex:1">
           <div class="admin-name" style="font-size:14px">Отработки онлайн</div>
-          <div class="admin-rule">1 500 ₽ за 60 мин · 2 250 ₽ за 90 мин</div>
+          <div class="admin-rule">1 500 ₽ за 60 мин · 2 250 ₽ за 90 мин · авто из проведённых отработок (можно поправить)</div>
         </div>
         <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap;justify-content:flex-end">
           <div>
@@ -1560,6 +1560,18 @@ async function fetchFinanceData(){
   }catch(e){}
 }
 
+// Авто-подстановка счётчиков «Отработки онлайн» из реальных проведённых отработок за выбранный месяц
+// (число 60-мин и 90-мин слотов). Убирает ручной ввод — как просила Оксана.
+function applyOtrAuto(){
+  try{
+    const cnt=(window.__otrByMonth||{})[picker.value];
+    if(!cnt) return;                                   // нет данных отработок за этот месяц — счётчики не трогаем
+    if((fixedState.otrabotki60||0)===cnt.o60 && (fixedState.otrabotki90||0)===cnt.o90) return;
+    fixedState.otrabotki60=cnt.o60; fixedState.otrabotki90=cnt.o90;
+    saveFixedState(); render();
+  }catch(e){}
+}
+
 // ЭКОНОМИЯ НА ОТРАБОТКАХ vs перерасчёт. Данные — из воркера (/otr-data, payLessons с полем closed).
 // Перерасчёт: 1000 ₽/урок (60 мин), 1250 ₽/урок (90 мин: Get Involved/Prepare/Gateway).
 // Экономия = закрыто_уроков×перерасчёт − оплата Инге (1500/2250 за сеанс). Видит только владелец.
@@ -1575,15 +1587,20 @@ async function fetchOtrSavings(){
     const rate=function(lk){return OTR90[lk]?2250:1500;};
     const MONTHS=['январь','февраль','март','апрель','май','июнь','июль','август','сентябрь','октябрь','ноябрь','декабрь'];
     const byM={}; let gRefund=0,gInga=0,gClosed=0,gSlots=0;
+    const byMonthCnt={};                       // ym -> {o60, o90} — число проведённых отработок по длительности
     d.payLessons.forEach(function(p){
       if(!p.conducted) return;
+      const ym=(p.date||'').slice(0,7);
+      const cc=byMonthCnt[ym]||(byMonthCnt[ym]={o60:0,o90:0});
+      if(OTR90[p.lk]) cc.o90++; else cc.o60++;
       const closed=(p.closed!=null)?p.closed:0;
       const refund=closed*perLesson(p.lk), inga=rate(p.lk);
-      const ym=(p.date||'').slice(0,7);
       const m=byM[ym]||(byM[ym]={refund:0,inga:0,closed:0,slots:0});
       m.refund+=refund; m.inga+=inga; m.closed+=closed; m.slots++;
       gRefund+=refund; gInga+=inga; gClosed+=closed; gSlots++;
     });
+    window.__otrByMonth = byMonthCnt;           // для авто-подстановки счётчиков «Отработки онлайн»
+    applyOtrAuto();
     if(gSlots===0 || gClosed===0){ card.style.display='none'; return; }  // ждём, пока сборщик посчитает closed
     document.getElementById('otrSaveTotal').textContent=fmt(gRefund-gInga);
     const months=Object.keys(byM).sort().reverse();
@@ -2086,6 +2103,7 @@ picker.addEventListener('change', () => {
   const had = applyMonth(picker.value); // за выбранный месяц поднимаем сохранённое
   currentMonth = picker.value;
   updateMonth();
+  applyOtrAuto();                     // отработки за месяц — авто из реальных данных
   render();
   renderPremiumBlock();
   const note = document.getElementById('monthNote');
