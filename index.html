@@ -1355,7 +1355,7 @@ const TEACHER_PCT = 0.25;
 const TARIFF = { 60: 8000, 90: 10000 };
 const MAX_PUPILS = 12;
 // Editable fixed payments — loaded from localStorage
-const FIXED_DEFAULTS = { cleaning: 33000, smm: 18000, rent: 200000, adminMin: 80000, otrabotki60: 0, otrabotki90: 0 };
+const FIXED_DEFAULTS = { cleaning: 33000, smm: 18000, rent: 200000, adminMin: 80000, otrabotki60: 0, otrabotki90: 0, adminAbonback: 9500 };
 // Налоги и взносы: даты платежей, а не начисления. Правится кнопкой «список».
 const COST_DEFAULTS = [
   { d: '31.08.2026', n: 'Реклама, типография, офисные товары', s: 140000 },
@@ -1876,7 +1876,9 @@ function render() {
     totalPotential += MAX_PUPILS * TARIFF[g.dur];
   });
 
-  const adminPct = Math.round(totalRevenue * ADMIN_PCT);
+  // база администратора = выручка + возврат абонементных скидок (только его 5%, см. adminAbonback)
+  const adminBase = totalRevenue + (fixedState.adminAbonback || 0);
+  const adminPct = Math.round(adminBase * ADMIN_PCT);
   const adminPay = Math.max(adminPct, fixedState.adminMin);
   const otrabotkiPay = (fixedState.otrabotki60 || 0) * 1500 + (fixedState.otrabotki90 || 0) * 2250;
   const taxPay = monthlyAmount('taxes');
@@ -2624,9 +2626,11 @@ function adminNumbers() {
     if (state.inactive && state.inactive[i]) return;   // не открытые группы не считаем — как на дашборде (иначе квиток завышал выручку)
     revenue += calcGroup(i).revenue;
   });
-  const pct = Math.round(revenue * ADMIN_PCT);
+  const abonback = fixedState.adminAbonback || 0;      // возврат абонементных скидок (индивидуальные/семейные НЕ трогаем)
+  const base = revenue + abonback;
+  const pct = Math.round(base * ADMIN_PCT);
   const min = fixedState.adminMin;
-  return { revenue, pct, min, pay: Math.max(pct, min), byMin: pct < min };
+  return { revenue, abonback, base, pct, min, pay: Math.max(pct, min), byMin: pct < min };
 }
 
 function adminName() {
@@ -2639,6 +2643,22 @@ function editAdminName() {
   fixedState.adminName = v.trim();
   saveFixedState();
   openAdminSlip();
+}
+
+// Возврат абонементных скидок в базу администратора (в месяц). Только абонементы —
+// индивидуальные/семейные скидки (5%/10%/100%) НЕ трогаем, их по % не отличить,
+// поэтому сумма считается по списку абонементщиков и правится вручную.
+function editAdminAbonback() {
+  const cur = fixedState.adminAbonback || 0;
+  const v = prompt('Возврат абонементных скидок в базу Натальи (₽/мес).\nСумма месячных абонементных скидок по списку абонементщиков.\nИндивидуальные/семейные скидки сюда НЕ входят.', cur);
+  if (v === null) return;
+  const n = parseInt(String(v).replace(/\s/g, ''));
+  if (!isNaN(n) && n >= 0) {
+    fixedState.adminAbonback = n;
+    saveFixedState();
+    render();
+    openAdminSlip();
+  }
 }
 
 function periodLabel() {
@@ -2670,7 +2690,10 @@ function openAdminSlip() {
     <table class="slip-groups">
       <tbody>
         <tr><td>Выручка школы за месяц</td><td class="r">${fmt(a.revenue)}</td></tr>
-        <tr><td>5% от выручки</td><td class="r">${fmt(a.pct)}</td></tr>
+        <tr><td>+ Возврат абонементных скидок
+          <button onclick="editAdminAbonback()" title="Изменить" style="margin-left:4px;font-size:11px;background:none;border:1px solid var(--gray-200);border-radius:8px;padding:0 6px;cursor:pointer;color:var(--gray-400)">✏️</button></td><td class="r">${fmt(a.abonback)}</td></tr>
+        <tr><td><b>База для 5%</b></td><td class="r"><b>${fmt(a.base)}</b></td></tr>
+        <tr><td>5% от базы</td><td class="r">${fmt(a.pct)}</td></tr>
         <tr><td>Гарантированный минимум</td><td class="r">${fmt(a.min)}</td></tr>
       </tbody>
     </table>
@@ -2730,7 +2753,9 @@ function printAdminSlip() {
       <table style="width:100%;border-collapse:collapse;font-size:10px;margin-bottom:10px">
         <tbody>
           ${row('Выручка школы за месяц', a.revenue)}
-          ${row('5% от выручки', a.pct)}
+          ${row('Возврат абонементных скидок', a.abonback)}
+          ${row('База для 5%', a.base, true)}
+          ${row('5% от базы', a.pct)}
           ${row('Гарантированный минимум', a.min)}
           ${row('К выплате', a.pay, true)}
         </tbody>
@@ -2738,8 +2763,8 @@ function printAdminSlip() {
 
       <div style="font-size:9px;color:#777;margin-bottom:14px">
         ${a.byMin
-          ? `5% от выручки (${fmt(a.pct)}) ниже минимума — к выплате принят минимум.`
-          : `5% от выручки (${fmt(a.pct)}) выше минимума — к выплате принят процент.`}
+          ? `5% от базы (${fmt(a.pct)}) ниже минимума — к выплате принят минимум.`
+          : `5% от базы (${fmt(a.pct)}) выше минимума — к выплате принят процент.`}
       </div>
 
       <div style="display:flex;gap:20px;margin-top:8px">
@@ -2767,7 +2792,9 @@ function copyAdminSlip() {
     `${adminName()} · ${periodLabel()}`,
     '─'.repeat(44),
     `Выручка школы:${String(fmt(a.revenue)).padStart(30)}`,
-    `5% от выручки:${String(fmt(a.pct)).padStart(30)}`,
+    `Возврат абонементов:${String(fmt(a.abonback)).padStart(24)}`,
+    `База для 5%:${String(fmt(a.base)).padStart(32)}`,
+    `5% от базы:${String(fmt(a.pct)).padStart(33)}`,
     `Минимум:${String(fmt(a.min)).padStart(36)}`,
     '─'.repeat(44),
     `К ВЫПЛАТЕ:${String(fmt(a.pay)).padStart(34)}`,
