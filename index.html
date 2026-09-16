@@ -2620,7 +2620,10 @@ const ADMIN_SLIP = '__admin__';
 
 function adminNumbers() {
   let revenue = 0;
-  GROUPS.forEach((g, i) => { revenue += calcGroup(i).revenue; });
+  GROUPS.forEach((g, i) => {
+    if (state.inactive && state.inactive[i]) return;   // не открытые группы не считаем — как на дашборде (иначе квиток завышал выручку)
+    revenue += calcGroup(i).revenue;
+  });
   const pct = Math.round(revenue * ADMIN_PCT);
   const min = fixedState.adminMin;
   return { revenue, pct, min, pay: Math.max(pct, min), byMin: pct < min };
