@@ -1370,6 +1370,21 @@ const NOSHOW = [
   { ym: '2026-09', group: 'Get Involved 2A', name: 'Генов Марк',         sum: 1250 },
   { ym: '2026-09', group: 'Prepare 5A',      name: 'Гончарова Варвара',  sum: 1250 },
 ];
+// ПЕРЕВОДЫ внутри месяца: ребёнок даёт ровно ОДИН полный абонемент. Новой группе добавляем остаток
+// до полного абонемента (минус то, что засчитано старой группе, где он был на уроках). Отрицательное —
+// если CRM начислила больше абонемента (был в старой группе + полный месяц в новой).
+const TRANSFER_ADJ = [
+  { ym: '2026-09', group: 'Get Involved 1A', name: 'Минибаев Данис (из GMF 4B, там не был)',        add: 5000 },
+  { ym: '2026-09', group: 'Get Involved 2B', name: 'Звонкова Мария (из GI 2A, там не была)',        add: 2500 },
+  { ym: '2026-09', group: 'Get Involved 1B', name: 'Пель Даниил (1 урок в GI 1A + полный месяц в 1B)', add: -1250 },
+  { ym: '2026-09', group: 'GMF 3C',          name: 'Нурова Айгулина (из GMF 3D, там не была)',      add: 3000 },
+  { ym: '2026-09', group: 'GMF 3D',          name: 'Сун-Си-Лан Арина (из GMF 3B, там 0 уроков)',    add: 1000 },
+  { ym: '2026-09', group: 'GMF 2B',          name: 'Ботяновский Роман (из GMF 2A, там не был)',     add: 1000 },
+];
+function transferAdjGroup(i, ym) {
+  const key = bbNorm(GROUPS[i].name), mon = ym || curYM();
+  return TRANSFER_ADJ.reduce((s, e) => (e.ym === mon && bbNorm(e.group) === key) ? s + e.add : s, 0);
+}
 function noShowGroup(i, ym) {
   const key = bbNorm(GROUPS[i].name), mon = ym || curYM();
   return NOSHOW.reduce((s, e) => (e.ym === mon && bbNorm(e.group) === key) ? s + e.sum : s, 0);
@@ -1791,7 +1806,7 @@ function calcGroup(i, ym) {
   if (!isActive(i, ym)) return { revenue: 0, fot: 0, hands: 0, deposit: 0 };   // не идёт в месяц — ни выручки, ни депозита
   const mr = monthCrm(ym);
   const gross = mr ? (+mr[i] || 0) : p * TARIFF[g.dur];   // CRM за месяц, иначе прогноз по тарифу
-  const noshow = mr ? noShowGroup(i, ym) : 0;              // выбывшие, не бывшие на уроках (только из данных CRM)
+  const noshow = mr ? noShowGroup(i, ym) - transferAdjGroup(i, ym) : 0;   // выбывшие без уроков; переводы — до полного абонемента
   const revenue = Math.max(0, gross - noshow - abonDiscGroup(i, ym));   // минус скидки длинных абонементов детей группы
   const fot = Math.round(revenue * TEACHER_PCT);
   const hands = fot - DEPOSIT;
