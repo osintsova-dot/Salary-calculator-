@@ -1384,18 +1384,45 @@ const NOSHOW = [
   { ym: '2026-09', group: 'Get Involved 2A', name: 'Звонкова Мария',     sum: 1250 },
   { ym: '2026-09', group: 'Get Involved 2A', name: 'Генов Марк',         sum: 1250 },
   { ym: '2026-09', group: 'Prepare 5A',      name: 'Гончарова Варвара',  sum: 1250 },
+  { ym: '2026-09', group: 'Get Involved 1A', name: 'Минибаев Данис (записан по ошибке 16–17.09)', sum: 1250 },
 ];
 // ПЕРЕВОДЫ внутри месяца: ребёнок даёт ровно ОДИН полный абонемент. Новой группе добавляем остаток
 // до полного абонемента (минус то, что засчитано старой группе, где он был на уроках). Отрицательное —
 // если CRM начислила больше абонемента (был в старой группе + полный месяц в новой).
 const TRANSFER_ADJ = [
-  { ym: '2026-09', group: 'Get Involved 1A', name: 'Минибаев Данис (из GMF 4B, там не был)',        add: 5000 },
+  { ym: '2026-09', group: 'Get Involved 2A', name: 'Минибаев Данис (GMF 4B и GI 1A — не был; с 17.09 в GI 2A)', add: 5000 },
   { ym: '2026-09', group: 'Get Involved 2B', name: 'Звонкова Мария (из GI 2A, там не была)',        add: 2500 },
   { ym: '2026-09', group: 'Get Involved 1B', name: 'Пель Даниил (1 урок в GI 1A + полный месяц в 1B)', add: -1250 },
   { ym: '2026-09', group: 'GMF 3C',          name: 'Нурова Айгулина (из GMF 3D, там не была)',      add: 3000 },
   { ym: '2026-09', group: 'GMF 3D',          name: 'Сун-Си-Лан Арина (из GMF 3B, там 0 уроков)',    add: 1000 },
   { ym: '2026-09', group: 'GMF 2B',          name: 'Ботяновский Роман (из GMF 2A, там не был)',     add: 1000 },
 ];
+// РАННЯЯ ОПЛАТА: сентябрь можно было оплатить до мая по старой цене (7 500 вместо 8 000, 9 500 вместо 10 000).
+// Скидка = абонемент по цене ребёнка в CRM − оплаченный счёт; только дети на весь месяц в группе.
+// Как с длинными абонементами: учителям от реальной оплаты, Наталье — возвращается в базу. Только сентябрь 2026.
+const EARLY = [
+  { ym: '2026-09', group: 'GMF 3B',          sum: 1500, who: 'Воробьев, Лебедев, Казанцев' },
+  { ym: '2026-09', group: 'GMF 2A',          sum: 1000, who: 'Денисов, Мартынов' },
+  { ym: '2026-09', group: 'Mimi 3',          sum: 500,  who: 'Клусова' },
+  { ym: '2026-09', group: 'GMF 1A',          sum: 2000, who: 'Волошина, Евсюков, Комарова, Кузьмина' },
+  { ym: '2026-09', group: 'GMF 2B',          sum: 1000, who: 'Белых, Кузнецов' },
+  { ym: '2026-09', group: 'GMF 3A',          sum: 500,  who: 'Кузнецова Екатерина (счёт в 3B, учится в 3A)' },
+  { ym: '2026-09', group: 'GMF 3C',          sum: 1500, who: 'Кощеева, Попова, Саляхова' },
+  { ym: '2026-09', group: 'GMF 3D',          sum: 1500, who: 'Гаврилова, Крылова, Федотова' },
+  { ym: '2026-09', group: 'GMF 4A',          sum: 1975, who: 'Метляева Ксения (7 125 из 7 600), Прядко, Сиротинский, Ткаченко' },
+  { ym: '2026-09', group: 'GMF 4B',          sum: 1500, who: 'Астапенко, Долгополова, Евлаш' },
+  { ym: '2026-09', group: 'Get Involved 1A', sum: 1000, who: 'Галицков, Шикан' },
+  { ym: '2026-09', group: 'Get Involved 1B', sum: 500,  who: 'Зайцева Мария (счёт в 1A, учится в 1B)' },
+  { ym: '2026-09', group: 'Get Involved 2B', sum: 500,  who: 'Стручинский' },
+  { ym: '2026-09', group: 'Prepare 4A',      sum: 1500, who: 'Акимкин, Матвейченко, Плиговка' },
+  { ym: '2026-09', group: 'Prepare 5A',      sum: 500,  who: 'Кузнецова Алиса' },
+  { ym: '2026-09', group: 'Gateway B2',      sum: 500,  who: 'Зябкин' },
+];
+function earlyGroup(i, ym) {
+  const key = bbNorm(GROUPS[i].name), mon = ym || curYM();
+  return EARLY.reduce((s, e) => (e.ym === mon && bbNorm(e.group) === key) ? s + e.sum : s, 0);
+}
+function earlyMonth(ym) { const mon = ym || curYM(); return EARLY.reduce((s, e) => e.ym === mon ? s + e.sum : s, 0); }
 function transferAdjGroup(i, ym) {
   const key = bbNorm(GROUPS[i].name), mon = ym || curYM();
   return TRANSFER_ADJ.reduce((s, e) => (e.ym === mon && bbNorm(e.group) === key) ? s + e.add : s, 0);
@@ -1826,7 +1853,8 @@ function calcGroup(i, ym) {
   const mr = monthCrm(ym);
   const gross = mr ? (+mr[i] || 0) : p * TARIFF[g.dur];   // CRM за месяц, иначе прогноз по тарифу
   const noshow = mr ? noShowGroup(i, ym) - transferAdjGroup(i, ym) : 0;   // выбывшие без уроков; переводы — до полного абонемента
-  const revenue = Math.max(0, gross - noshow - abonDiscGroup(i, ym));   // минус скидки длинных абонементов детей группы
+  const early = mr ? earlyGroup(i, ym) : 0;                  // ранняя оплата сентября по старой цене
+  const revenue = Math.max(0, gross - noshow - abonDiscGroup(i, ym) - early);   // минус скидки длинных абонементов и ранней оплаты
   const fot = Math.round(revenue * TEACHER_PCT);
   const hands = fot - DEPOSIT;
   return { revenue, fot, hands: Math.max(0, hands), deposit: DEPOSIT };
@@ -2157,7 +2185,7 @@ function render() {
   document.getElementById('depositYearly').textContent = activeGroups + ' активных групп · за 9 мес: ' + fmt(totalDeposit * 9);
   document.getElementById('adminPay').textContent = fmt(adminPay);
   document.getElementById('adminNote').textContent = '5% от ' + fmt(adminBase)
-    + (adminBase !== totalRevenue ? ' (выручка + абонементы ' + fmt(adminBase - totalRevenue) + ')' : '')
+    + (adminBase !== totalRevenue ? ' (выручка + скидки абонементов' + (monthCrm(picker.value) && earlyMonth() ? ' и ранней оплаты' : '') + ' ' + fmt(adminBase - totalRevenue) + ')' : '')
     + ' = ' + fmt(adminPct) + (adminPct < fixedState.adminMin ? ' → минимум' : '');
   const profit = totalRevenue - totalAllPay;
   // Зарплата Оксаны — тоже её деньги, поэтому в «остатке» она возвращается обратно
@@ -2864,7 +2892,8 @@ const ADMIN_SLIP = '__admin__';
 function adminAbonback() {
   const mon = (typeof picker !== 'undefined' && picker && picker.value) || '';
   const list = (fixedState.abonements) || [];
-  return list.reduce((s, e) => {
+  const early = monthCrm(mon) ? earlyMonth(mon) : 0;          // + скидка ранней оплаты (сентябрь)
+  return early + list.reduce((s, e) => {
     if (!e || !mon) return s;
     const from = e.from || '0000-00', until = e.until || '9999-99';
     return (from <= mon && mon <= until) ? s + (+e.disc || 0) : s;
@@ -2961,7 +2990,7 @@ function openAdminSlip() {
     <table class="slip-groups">
       <tbody>
         <tr><td>Выручка школы за месяц</td><td class="r">${fmt(a.revenue)}</td></tr>
-        <tr><td>+ Возврат абонементных скидок <span style="color:var(--gray-400);font-size:11px">· активных ${adminAbonbackCount()}</span>
+        <tr><td>+ Возврат скидок (абонементы${monthCrm(picker.value) && earlyMonth() ? ', ранняя оплата ' + fmt(earlyMonth()) : ''}) <span style="color:var(--gray-400);font-size:11px">· активных ${adminAbonbackCount()}</span>
           <button onclick="editAdminAbonback()" title="Изменить список абонементов" style="margin-left:4px;font-size:11px;background:none;border:1px solid var(--gray-200);border-radius:8px;padding:0 6px;cursor:pointer;color:var(--gray-400)">✏️</button></td><td class="r">${fmt(a.abonback)}</td></tr>
         <tr><td><b>База для 5%</b></td><td class="r"><b>${fmt(a.base)}</b></td></tr>
         <tr><td>5% от базы</td><td class="r">${fmt(a.pct)}</td></tr>
