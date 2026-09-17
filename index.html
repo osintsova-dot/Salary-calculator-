@@ -2312,7 +2312,8 @@ function storeMonth(month) {
 function applyMonth(month) {
   const rec = monthSnapshot(getHistory()[month]);
   if (!rec) return false;
-  state.pupils = { ...rec.pupils };
+  // с сентября 2026 число учеников — актуальное из CRM, а не из старого сохранения месяца
+  state.pupils = (month >= '2026-09' && state.crmPupils) ? { ...rec.pupils, ...state.crmPupils } : { ...rec.pupils };
   fixedState.otrabotki60 = rec.o60 || 0;
   fixedState.otrabotki90 = rec.o90 || 0;
   if (rec.fixed) Object.assign(fixedState, rec.fixed);
@@ -3182,6 +3183,7 @@ function bbMatch(bbName) {
 function applyBigBen(rawList) {
   const changed = [], same = [], unknown = [], missed = [], money = [];
   const touched = new Set();
+  const crmPupils = {};
   if (!state.crmRev) state.crmRev = {};
   // служебная запись в конце списка: выручка по месяцам, не группа
   const tag = rawList.find(x => x && !x.n && !x.name) || {};
@@ -3220,6 +3222,7 @@ function applyBigBen(rawList) {
     if (i < 0) { unknown.push(name + ' · ' + pupils); return; }
     touched.add(i);
     const was = state.pupils[i] || 0;
+    crmPupils[i] = pupils;
     if (was !== pupils) { state.pupils[i] = pupils; changed.push(GROUPS[i].name + ': ' + was + ' → ' + pupils); }
     else same.push(GROUPS[i].name);
     const rub = (state.crmRevM[monTag] || {})[i];
@@ -3230,6 +3233,7 @@ function applyBigBen(rawList) {
       money.push(GROUPS[i].name + ': ' + fmt(rub) + (full !== rub ? ' (без скидок ' + fmt(full) + ')' : '') + note);
     }
   });
+  if (Object.keys(crmPupils).length) state.crmPupils = crmPupils;   // актуальный состав из CRM — для всех месяцев учебного года
   GROUPS.forEach((g, i) => { if (!touched.has(i)) missed.push(g.name); });
   render();
   localStorage.setItem('ss_salary_state', JSON.stringify(state));
