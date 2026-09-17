@@ -1360,14 +1360,14 @@ const FIXED_DEFAULTS = { cleaning: 33000, smm: 18000, rent: 200000, adminMin: 80
   // + с какого по какой месяц активен. Возврат сам тает, когда абонемент кончается.
   // ТОЛЬКО абонементы; семейные/индивидуальные скидки сюда НЕ входят.
   abonements: [
-    { name: 'Мурзагулов Рома',  disc: 1200, from: '2026-09', until: '2027-05' },
-    { name: 'Панкова Тая',      disc: 1200, from: '2026-09', until: '2027-05' },
-    { name: 'Батяновский',      disc: 1200, from: '2026-09', until: '2027-05' },
-    { name: 'Колесникова Анна', disc: 1200, from: '2026-09', until: '2027-05' },
-    { name: 'Погорелова Ксюша', disc: 1200, from: '2026-09', until: '2027-05' },
-    { name: 'Осиян Тимур',      disc: 1500, from: '2026-09', until: '2027-05' },
-    { name: 'Елькина',          disc: 1500, from: '2026-09', until: '2027-05' },
-    { name: 'Цупрун',           disc: 500,  from: '2026-09', until: '2026-11' },
+    { name: 'Мурзагулов Рома',  disc: 1200, from: '2026-09', until: '2027-05', group: 'GMF 1A' },
+    { name: 'Панкова Тая',      disc: 1200, from: '2026-09', until: '2027-05', group: 'GMF 2B' },
+    { name: 'Ботяновский Роман', disc: 1200, from: '2026-09', until: '2027-05', group: 'GMF 2B' },
+    { name: 'Колесникова Анна', disc: 1200, from: '2026-09', until: '2027-05', group: 'GMF 2A' },
+    { name: 'Погорелова Ксюша', disc: 1200, from: '2026-09', until: '2027-05', group: 'GMF 3B' },
+    { name: 'Осиян Тимур',      disc: 1500, from: '2026-09', until: '2027-05', group: 'Prepare 4A' },
+    { name: 'Елькина',          disc: 1500, from: '2026-09', until: '2027-05', group: 'Prepare 3A' },
+    { name: 'Цупрун',           disc: 500,  from: '2026-09', until: '2026-11', group: 'Get Involved 2A' },
   ] };
 // Налоги и взносы: даты платежей, а не начисления. Правится кнопкой «список».
 const COST_DEFAULTS = [
@@ -1510,6 +1510,16 @@ function renderPremiumBlock() {
   });
 }
 let fixedState = Object.assign({}, FIXED_DEFAULTS, JSON.parse(localStorage.getItem('ss_fixed') || '{}'));
+// у старых сохранённых абонементов нет группы — проставляем по фамилии (скидка вычитается в группе ребёнка)
+(function () {
+  const G = { 'мурзагулов': 'GMF 1A', 'панкова': 'GMF 2B', 'батяновск': 'GMF 2B', 'ботяновск': 'GMF 2B', 'колесникова': 'GMF 2A',
+              'погорелова': 'GMF 3B', 'осиян': 'Prepare 4A', 'елькина': 'Prepare 3A', 'цупрун': 'Get Involved 2A' };
+  (fixedState.abonements || []).forEach(e => {
+    if (!e || e.group) return;
+    const k = Object.keys(G).find(x => (e.name || '').toLowerCase().indexOf(x) === 0);
+    if (k) e.group = G[k];
+  });
+})();
 let taxState = JSON.parse(localStorage.getItem('ss_taxes') || 'null') || TAX_DEFAULTS.slice();
 let costState = JSON.parse(localStorage.getItem('ss_costs') || 'null') || COST_DEFAULTS.slice();
 function saveTaxState() { localStorage.setItem('ss_taxes', JSON.stringify(taxState)); }
@@ -1760,7 +1770,8 @@ function calcGroup(i, ym) {
   const p = state.pupils[i] || 0;
   if (!isActive(i, ym)) return { revenue: 0, fot: 0, hands: 0, deposit: 0 };   // не идёт в месяц — ни выручки, ни депозита
   const mr = monthCrm(ym);
-  const revenue = mr ? (+mr[i] || 0) : p * TARIFF[g.dur];   // CRM за месяц, иначе прогноз по тарифу
+  const gross = mr ? (+mr[i] || 0) : p * TARIFF[g.dur];   // CRM за месяц, иначе прогноз по тарифу
+  const revenue = Math.max(0, gross - abonDiscGroup(i, ym));   // минус скидки длинных абонементов детей группы
   const fot = Math.round(revenue * TEACHER_PCT);
   const hands = fot - DEPOSIT;
   return { revenue, fot, hands: Math.max(0, hands), deposit: DEPOSIT };
@@ -1992,7 +2003,7 @@ function render() {
   document.getElementById('totalRevenue').textContent = fmt(totalRevenue);
   const crmNow = monthCrm(picker.value);
   document.getElementById('totalPupils').textContent = totalPupils + ' учеников в ' + GROUPS.filter((g, i) => isActive(i)).length + ' группах'
-    + (crmNow ? ' · из CRM' : ' · ⚠️ прогноз по тарифу: в CRM нет начислений за месяц');
+    + (crmNow ? ((state.crmOldM || {})[picker.value] ? ' · ⚠️ по урокам — обнови закладку «BigBen → калькулятор»' : ' · из CRM, по абонементам') : ' · ⚠️ прогноз по тарифу: в CRM нет начислений за месяц');
   document.getElementById('totalFot').textContent = fmt(totalFot);
   document.getElementById('totalHandsPay').textContent = 'На руки: ' + fmt(totalHands);
   const activeGroups = GROUPS.filter((g, i) => isActive(i)).length;
@@ -2711,6 +2722,16 @@ function adminAbonback() {
   }, 0);
 }
 
+// Скидки длинных абонементов детей ЭТОЙ группы, активные в месяце. Выручка группы (и 25% учителю)
+// считается по реальным деньгам — без этих скидок; Наталье они возвращаются в базу (adminAbonback).
+function abonDiscGroup(i, ym) {
+  const mon = ym || curYM();
+  const key = bbNorm(GROUPS[i].name);
+  return ((fixedState.abonements) || []).reduce((s, e) => {
+    if (!e || !e.group || bbNorm(e.group) !== key) return s;
+    return ((e.from || '0000-00') <= mon && mon <= (e.until || '9999-99')) ? s + (+e.disc || 0) : s;
+  }, 0);
+}
 function adminAbonbackCount() {
   const mon = (typeof picker !== 'undefined' && picker && picker.value) || '';
   return ((fixedState.abonements) || []).filter(e => e && mon && (e.from || '0000-00') <= mon && mon <= (e.until || '9999-99')).length;
@@ -2746,16 +2767,16 @@ function editAdminName() {
 // поэтому сумма считается по списку абонементщиков и правится вручную.
 function editAdminAbonback() {
   const list = fixedState.abonements || [];
-  const cur = list.map(e => `${e.name} ; ${e.disc} ; ${e.from || '2026-09'} ; ${e.until}`).join('\n');
+  const cur = list.map(e => `${e.name} ; ${e.disc} ; ${e.from || '2026-09'} ; ${e.until} ; ${e.group || ''}`).join('\n');
   const v = prompt(
-    'Абонементы — по одному в строке:\nИмя ; скидка ₽/мес ; с ГГГГ-ММ ; до ГГГГ-ММ\n\n' +
+    'Абонементы — по одному в строке:\nИмя ; скидка ₽/мес ; с ГГГГ-ММ ; до ГГГГ-ММ ; группа (как в калькуляторе, напр. GMF 2B)\n\n' +
     'Возврат за месяц = сумма активных (сам тает, когда абонемент кончается).\n' +
     'Только абонементы; семейные/индивидуальные скидки сюда НЕ вносить.', cur);
   if (v === null) return;
   const parsed = String(v).split(/\n/)
     .map(l => l.split(';').map(s => s.trim()))
     .filter(p => p.length >= 3 && p[0])
-    .map(p => ({ name: p[0], disc: parseInt((p[1] || '').replace(/\s/g, '')) || 0, from: p[2] || '2026-09', until: p[3] || p[2] || '2027-05' }));
+    .map(p => ({ name: p[0], disc: parseInt((p[1] || '').replace(/\s/g, '')) || 0, from: p[2] || '2026-09', until: p[3] || p[2] || '2027-05', group: p[4] || '' }));
   fixedState.abonements = parsed;
   saveFixedState();
   render();
@@ -3200,12 +3221,15 @@ function applyBigBen(rawList) {
       const acc = revByMonth[ym];
       if (!acc) return;
       const m = {};
+      let oldFmt = false;
       Object.keys(acc).forEach(name => {
         const i = bbMatch(name), cell = acc[name];
         if (i < 0 || !cell) return;                     // отработки/консультации в калькуляторе нет — не берём
         let rub = null;
-        // РЕАЛЬНАЯ «К оплате» из BigBen — с учётом ВСЕХ скидок, включая длинные абонементы
-        if (cell[0] != null && !isNaN(+cell[0])) rub = +cell[0];
+        // Выручка = АБОНЕМЕНТЫ: ребёнок на весь месяц — 8 уроков × его цена (со скидкой семьи),
+        // пришёл/ушёл/переведён в середине — по фактическим урокам. От числа уроков в месяце не зависит.
+        if (cell[4] != null && !isNaN(+cell[4])) rub = +cell[4];
+        else if (cell[0] != null && !isNaN(+cell[0])) { rub = +cell[0]; oldFmt = true; }   // старая закладка: по урокам
         else if (cell[3] && typeof cell[3] === 'object') {   // запасной: тариф × скидка % каждого ученика
           rub = 0;
           Object.entries(cell[3]).forEach(([pc, cnt]) => { rub += TARIFF[GROUPS[i].dur] * (1 - (+pc) / 100) * (+cnt); });
@@ -3214,6 +3238,8 @@ function applyBigBen(rawList) {
         if (rub !== null) m[i] = (m[i] || 0) + rub;
       });
       state.crmRevM[ym] = m;
+      state.crmOldM = state.crmOldM || {};
+      if (oldFmt) state.crmOldM[ym] = true; else delete state.crmOldM[ym];
     });
   }
   list.forEach(item => {
@@ -3373,15 +3399,15 @@ function closeBigBenOverlay(e) { if (e.target.id === 'bigbenModal') closeBigBenM
     "const acc={};" +
     "for(var ri=0;ri<2;ri++){const rid=ri?7:4;" +
     "const q=await fetch('/admin/index.php?obj=reportmain&action=list&report_type_id='+rid+'&filial_id=0&period_start='+ds(a)+'&period_end='+ds(b),{credentials:'include'});" +
-    "const dd=new DOMParser().parseFromString(await q.text(),'text/html');let cg=null;" +
+    "const dd=new DOMParser().parseFromString(await q.text(),'text/html');let cg=null,gh=0;" +
     "dd.querySelectorAll('table').forEach(t=>{const rows=[].slice.call(t.querySelectorAll('tr'));" +
     "const hd=(rows[0]?rows[0].textContent:'').replace(/\\s+/g,' ').trim();" +
-    "if(/^\\u0413\\u0440\\u0443\\u043f\\u043f\\u0430/.test(hd)){const c=rows[1]?[].slice.call(rows[1].children).map(x=>x.textContent.replace(/\\s+/g,' ').trim()):[];cg=c[0]||null;return;}" +
-    "if(/\\u041a \\u043e\\u043f\\u043b\\u0430\\u0442\\u0435, \\u0440\\u0443\\u0431/.test(hd)&&cg){var rv=0,dc=0,fr=0,any=0,pcts={};" +
+    "if(/^\\u0413\\u0440\\u0443\\u043f\\u043f\\u0430/.test(hd)){const c=rows[1]?[].slice.call(rows[1].children).map(x=>x.textContent.replace(/\\s+/g,' ').trim()):[];cg=c[0]||null;gh=parseFloat(c[1]||'0')||0;return;}" +
+    "if(/\\u041a \\u043e\\u043f\\u043b\\u0430\\u0442\\u0435, \\u0440\\u0443\\u0431/.test(hd)&&cg){var rv=0,dc=0,fr=0,any=0,pcts={},ab=0;" +
     "rows.slice(1).forEach(tr=>{const c=[].slice.call(tr.children).map(x=>x.textContent.replace(/\\s+/g,' ').trim());" +
     "if(c.length<8||!/^\\d+$/.test(c[0]))return;any=1;const base=parseFloat(c[4]||'0'),ind=parseFloat(c[5]||'0'),sum=parseFloat((c[7]||'0').replace(',','.'));" +
-    "rv+=isNaN(sum)?0:sum;if(ind===0)fr++;else if(ind<base-0.001)dc++;var pc=base>0?Math.round((1-ind/base)*100):0;pcts[pc]=(pcts[pc]||0)+1;});" +
-    "if(any)acc[cg]=[Math.round(rv),dc,fr,pcts];}});}" +
+    "rv+=isNaN(sum)?0:sum;const h=parseFloat(c[6]||'0');ab+=(gh>0&&h>=gh)?Math.round(8*(c[5]===''?base:ind)):(isNaN(sum)?0:sum);if(ind===0)fr++;else if(ind<base-0.001)dc++;var pc=base>0?Math.round((1-ind/base)*100):0;pcts[pc]=(pcts[pc]||0)+1;});" +
+    "if(any){const o=acc[cg];acc[cg]=o?[o[0]+Math.round(rv),o[1]+dc,o[2]+fr,o[3],o[4]+Math.round(ab)]:[Math.round(rv),dc,fr,pcts,Math.round(ab)];}}});}" +
     "if(Object.keys(acc).length)rev[key]=acc;}" +
     "const all=Object.values(map);" +
     "if(!all.length){alert('\\u0413\\u0440\\u0443\\u043f\\u043f\\u044b \\u043d\\u0435 \\u043d\\u0430\\u0439\\u0434\\u0435\\u043d\\u044b');return;}" +
