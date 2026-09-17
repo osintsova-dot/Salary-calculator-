@@ -1049,7 +1049,7 @@
       <div class="fx-row" style="display:flex;align-items:center;padding:12px var(--px)">
         <div style="flex:1">
           <div class="admin-name" style="font-size:14px">Отработки онлайн</div>
-          <div class="admin-rule">1 500 ₽ за 60 мин · 2 250 ₽ за 90 мин · авто из проведённых отработок (можно поправить)</div>
+          <div class="admin-rule">1 500 ₽ за 60 мин · 2 250 ₽ за 90 мин · автоматически из вкладки «Отработки»</div>
         </div>
         <div class="fx-vals" style="display:flex;align-items:center;gap:16px;flex-wrap:wrap;justify-content:flex-end">
           <div>
@@ -1095,7 +1095,7 @@
         <div style="flex:1">
           <div class="admin-name" style="font-size:14px">Прочие расходы школы</div>
           <div class="admin-rule">реклама, типография, хозтовары
-            &nbsp;<button onclick="editMonthly('costs')" style="font-size:10px;font-family:var(--font);border:1px solid var(--gray-200);background:none;border-radius:10px;padding:1px 7px;cursor:pointer;color:var(--gray-400)">✏️ сумма</button>
+            &nbsp;<button id="costEditBtn" onclick="editMonthly('costs')" style="font-size:10px;font-family:var(--font);border:1px solid var(--gray-200);background:none;border-radius:10px;padding:1px 7px;cursor:pointer;color:var(--gray-400)">✏️ сумма</button>
           </div>
           <div id="costList" style="font-size:11px;color:var(--gray-400);margin-top:4px;line-height:1.6"></div>
         </div>
@@ -1390,7 +1390,7 @@ let premiumState = JSON.parse(localStorage.getItem('ss_premium') || 'null') || J
 function savePremiumState() { localStorage.setItem('ss_premium', JSON.stringify(premiumState)); }
 
 function calcPremiumFund(teacher) {
-  const tGroups = GROUPS.filter((g, i) => g.teacher === teacher && !(state.inactive && state.inactive[i]));
+  const tGroups = GROUPS.filter((g, i) => g.teacher === teacher && isActive(i));
   return tGroups.length * 2500 * 9; // 2500/group × 9 months
 }
 
@@ -1619,6 +1619,22 @@ function editSummerSaved() {
   if (!n) delete summerState.saved[picker.value]; else summerState.saved[picker.value] = n;
   saveSummerState(); render();
 }
+// Отработки за месяц — из вкладки «Отработки» (проведённые слоты), одинаково на всех устройствах.
+// null — данных ещё нет (или месяц до сентября 2026): тогда ручные счётчики.
+function otrCounts(ym) {
+  let all = window.__otrByMonth;
+  if (!all) { try { all = JSON.parse(localStorage.getItem('ss_otr_counts') || 'null'); } catch (e) {} }
+  if (!all || ym < '2026-09') return null;
+  return all[ym] || { o60: 0, o90: 0 };
+}
+// Прочие расходы за месяц — из CRM (раздел «Расходы», вносит Наталья: хоз, типография, реклама).
+// Зарплаты, аренду и налоги она туда НЕ вносит — двойного счёта нет. null — нет данных/до сентября 2026.
+function crmSpent(ym) {
+  if (ym < '2026-09') return null;
+  let sp = null; try { sp = JSON.parse(localStorage.getItem('ss_spent') || 'null'); } catch (e) {}
+  if (!sp) return null;
+  return Math.round(+sp[ym] || 0);
+}
 function monthlyAmount(kind, ym) { return (monthlyState[kind] || {})[ym || picker.value] || 0; }
 
 // ---------- ДАТИРОВАННЫЕ ПЛАТЕЖИ: НАЛОГИ И ПРОЧИЕ РАСХОДЫ ----------
@@ -1703,6 +1719,30 @@ let state = JSON.parse(localStorage.getItem('ss_salary_state') || 'null') || {
 // выручка, посчитанная самой CRM (уже со скидками); нет данных — считаем по тарифу
 if (!state.crmRev) state.crmRev = {};
 if (!state.inactive) state.inactive = {};
+// Выручка из CRM ПО МЕСЯЦАМ {'2026-09': {индекс группы: ₽}} и ручное выключение группы
+// в конкретном месяце {'2026-09': {индекс: true}}. Раньше и то и другое было одно на все месяцы.
+if (!state.crmRevM) state.crmRevM = {};
+if (!state.offM) state.offM = {};
+function curYM() { return picker.value; }
+// данные CRM за месяц (null — за этот месяц в CRM начислений нет, считаем прогноз по тарифу)
+function monthCrm(ym) {
+  if (!useCrmRevenue()) return null;
+  const m = state.crmRevM[ym || curYM()];
+  return m && Object.keys(m).length ? m : null;
+}
+// Группа идёт в расчёт месяца: есть данные CRM — только если по ней есть начисления;
+// нет данных CRM (прогноз) — если есть ученики. Плюс ручное выключение на этот месяц.
+function isActive(i, ym) {
+  ym = ym || curYM();
+  if (state.offM[ym] && state.offM[ym][i]) return false;
+  const mr = monthCrm(ym);
+  if (mr) return (+mr[i] || 0) > 0;
+  return (state.pupils[i] || 0) > 0;
+}
+function crmMissing(i, ym) {           // группа с учениками, но без начислений в CRM за месяц
+  const mr = monthCrm(ym);
+  return !!mr && !((+mr[i] || 0) > 0) && (state.pupils[i] || 0) > 0;
+}
 
 function fmt(n) {
   return n.toLocaleString('ru-RU') + ' ₽';
@@ -1715,17 +1755,30 @@ function statusDot(p) {
   return 'status-low';
 }
 
-function calcGroup(i) {
+function calcGroup(i, ym) {
   const g = GROUPS[i];
   const p = state.pupils[i] || 0;
-  const fromCrm = (state.crmRev && state.crmRev[i] != null) ? +state.crmRev[i] : null;
-  const revenue = fromCrm !== null ? fromCrm : p * TARIFF[g.dur];
+  if (!isActive(i, ym)) return { revenue: 0, fot: 0, hands: 0, deposit: 0 };   // не идёт в месяц — ни выручки, ни депозита
+  const mr = monthCrm(ym);
+  const revenue = mr ? (+mr[i] || 0) : p * TARIFF[g.dur];   // CRM за месяц, иначе прогноз по тарифу
   const fot = Math.round(revenue * TEACHER_PCT);
   const hands = fot - DEPOSIT;
   return { revenue, fot, hands: Math.max(0, hands), deposit: DEPOSIT };
 }
 
-const MONTHS_RU_C={"январ":"01","феврал":"02","март":"03","апрел":"04","ма":"05","июн":"06","июл":"07","август":"08","сентябр":"09","октябр":"10","ноябр":"11","декабр":"12"};
+// «За какой месяц» из комментария оплаты. Месяц — ОТДЕЛЬНЫМ словом (раньше «ма» ловило «Мария»,
+// «система оплаты» → всё уходило в май). Берём последнее упоминание; год — ближайший к дате платежа.
+const MONTH_RE_C=/(?:^|[^а-яё])(январ|феврал|март|апрел|ма[йяюе](?![а-яё])|июн|июл|август|сентябр|октябр|ноябр|декабр)/g;
+const MONTH_NUM_C={"январ":1,"феврал":2,"март":3,"апрел":4,"июн":6,"июл":7,"август":8,"сентябр":9,"октябр":10,"ноябр":11,"декабр":12};
+function monthKeyFromComment(comment,y,m){
+  let last=null,x; MONTH_RE_C.lastIndex=0;
+  while((x=MONTH_RE_C.exec(comment))) last=x[1];
+  if(!last) return null;
+  const mm=MONTH_NUM_C[last]||5;                     // всё, чего нет в таблице, — это «май/мая/…»
+  let best=null;                                     // при равенстве — вперёд (платят заранее)
+  [y-1,y,y+1].forEach(yy=>{ const d=(yy*12+mm)-(y*12+m); if(best===null||Math.abs(d)<Math.abs(best.d)||(Math.abs(d)===Math.abs(best.d)&&d>0)) best={yy:yy,d:d}; });
+  return best.yy+'-'+String(mm).padStart(2,'0');
+}
 function csvSumByMonth(text){
   const cash={}, paidFor={};
   const lines=text.split('\n');
@@ -1737,7 +1790,7 @@ function csvSumByMonth(text){
     const sum=parseFloat(p[4].replace(/["\s]/g,'').replace(',','.')); if(isNaN(sum)) continue;
     cash[m[3]+'-'+m[2]]=(cash[m[3]+'-'+m[2]]||0)+sum;
     const comment=p.slice(5).join(';').toLowerCase();
-    for(const st in MONTHS_RU_C){ if(comment.indexOf(st)>=0){ const mm=MONTHS_RU_C[st]; const yr=(+mm>=9)?'2026':'2027'; const k=yr+'-'+mm; paidFor[k]=(paidFor[k]||0)+sum; break; } }
+    const k=monthKeyFromComment(comment,+m[3],+m[2]); if(k) paidFor[k]=(paidFor[k]||0)+sum;
   }
   return {cash, paidFor};
 }
@@ -1768,22 +1821,14 @@ async function fetchFinanceData(){
       if(d.debtTotal!=null) localStorage.setItem('ss_debt_total',String(d.debtTotal));
       if(d.debtCount!=null) localStorage.setItem('ss_debt_count',String(d.debtCount));
       if(d.at) localStorage.setItem('ss_finance_at',d.at);
-      renderFinance();
+      render();   // расходы из CRM входят в фиксированные выплаты — пересчитать всё
     }
   }catch(e){}
 }
 
 // Авто-подстановка счётчиков «Отработки онлайн» из реальных проведённых отработок за выбранный месяц
 // (число 60-мин и 90-мин слотов). Убирает ручной ввод — как просила Оксана.
-function applyOtrAuto(){
-  try{
-    const cnt=(window.__otrByMonth||{})[picker.value];
-    if(!cnt) return;                                   // нет данных отработок за этот месяц — счётчики не трогаем
-    if((fixedState.otrabotki60||0)===cnt.o60 && (fixedState.otrabotki90||0)===cnt.o90) return;
-    fixedState.otrabotki60=cnt.o60; fixedState.otrabotki90=cnt.o90;
-    saveFixedState(); render();
-  }catch(e){}
-}
+function applyOtrAuto(){ /* счётчики теперь берутся прямо в render() через otrCounts() */ }
 
 // ЭКОНОМИЯ НА ОТРАБОТКАХ vs перерасчёт. Данные — из воркера (/otr-data, payLessons с полем closed).
 // Перерасчёт: 1000 ₽/урок (60 мин), 1250 ₽/урок (90 мин: Get Involved/Prepare/Gateway).
@@ -1813,7 +1858,8 @@ async function fetchOtrSavings(){
       gRefund+=refund; gInga+=inga; gClosed+=closed; gSlots++;
     });
     window.__otrByMonth = byMonthCnt;           // для авто-подстановки счётчиков «Отработки онлайн»
-    applyOtrAuto();
+    try { localStorage.setItem('ss_otr_counts', JSON.stringify(byMonthCnt)); } catch (e) {}
+    render();
     if(gSlots===0 || gClosed===0){ card.style.display='none'; return; }  // ждём, пока сборщик посчитает closed
     document.getElementById('otrSaveTotal').textContent=fmt(gRefund-gInga);
     const months=Object.keys(byM).sort().reverse();
@@ -1879,7 +1925,7 @@ function render() {
   let totalPotential = 0;
 
   GROUPS.forEach((g, i) => {
-    if (state.inactive && state.inactive[i]) return;   // группа не открыта — не считаем
+    if (!isActive(i)) return;   // группа не идёт в этом месяце — не считаем
     const c = calcGroup(i);
     totalRevenue += c.revenue;
     totalFot += c.fot;
@@ -1893,9 +1939,12 @@ function render() {
   const adminBase = totalRevenue + adminAbonback();
   const adminPct = Math.round(adminBase * ADMIN_PCT);
   const adminPay = Math.max(adminPct, fixedState.adminMin);
+  const otrAuto = otrCounts(picker.value);
+  if (otrAuto) { fixedState.otrabotki60 = otrAuto.o60; fixedState.otrabotki90 = otrAuto.o90; }
   const otrabotkiPay = (fixedState.otrabotki60 || 0) * 1500 + (fixedState.otrabotki90 || 0) * 2250;
   const taxPay = monthlyAmount('taxes');
-  const costPay = monthlyAmount('costs');
+  const costCrm = crmSpent(picker.value);
+  const costPay = costCrm !== null ? costCrm : monthlyAmount('costs');
   // Кредиты: платёж = целевой аннуитет, чтобы закрыть к дате
   const creditN = monthsToTarget();
   const creditRows = creditsState.list.map(function (c) {
@@ -1941,22 +1990,24 @@ function render() {
 
   // Summary cards
   document.getElementById('totalRevenue').textContent = fmt(totalRevenue);
-  document.getElementById('totalPupils').textContent = totalPupils + ' учеников в ' + GROUPS.length + ' группах';
+  const crmNow = monthCrm(picker.value);
+  document.getElementById('totalPupils').textContent = totalPupils + ' учеников в ' + GROUPS.filter((g, i) => isActive(i)).length + ' группах'
+    + (crmNow ? ' · из CRM' : ' · ⚠️ прогноз по тарифу: в CRM нет начислений за месяц');
   document.getElementById('totalFot').textContent = fmt(totalFot);
   document.getElementById('totalHandsPay').textContent = 'На руки: ' + fmt(totalHands);
-  const activeGroups = GROUPS.filter((g, i) => !(state.inactive && state.inactive[i])).length;
+  const activeGroups = GROUPS.filter((g, i) => isActive(i)).length;
   document.getElementById('totalDeposit').textContent = fmt(totalDeposit);
   document.getElementById('depositYearly').textContent = activeGroups + ' активных групп · за 9 мес: ' + fmt(totalDeposit * 9);
   document.getElementById('adminPay').textContent = fmt(adminPay);
-  document.getElementById('adminNote').textContent = adminPct >= ADMIN_MIN
-    ? '5% = ' + fmt(adminPct)
-    : '5% = ' + fmt(adminPct) + ' → минимум';
+  document.getElementById('adminNote').textContent = '5% от ' + fmt(adminBase)
+    + (adminBase !== totalRevenue ? ' (выручка + абонементы ' + fmt(adminBase - totalRevenue) + ')' : '')
+    + ' = ' + fmt(adminPct) + (adminPct < fixedState.adminMin ? ' → минимум' : '');
   const profit = totalRevenue - totalAllPay;
   // Зарплата Оксаны — тоже её деньги, поэтому в «остатке» она возвращается обратно
   const ownerName = 'Оксана Синцова';
   let ownerHands = 0, ownerDeposit = 0;
   GROUPS.forEach((g, i) => {
-    if (g.teacher !== ownerName) return;
+    if (g.teacher !== ownerName || !isActive(i)) return;   // только группы, что идут в выручку месяца
     const c = calcGroup(i);
     ownerHands += c.hands;
     ownerDeposit += c.deposit;
@@ -2073,6 +2124,13 @@ function render() {
   document.getElementById('otrabotkiTotal').textContent = fmt(Math.round(otrabotkiPay));
   renderMonthly('taxes');
   renderMonthly('costs');
+  const costBtn = document.getElementById('costEditBtn');
+  if (costCrm !== null) {
+    document.getElementById('costVal').textContent = fmt(costPay);
+    document.getElementById('costList').textContent = 'из CRM (Расходы) · автоматически';
+    if (costBtn) costBtn.style.display = 'none';
+  } else if (costBtn) costBtn.style.display = '';
+  ['otrabotki60Count', 'otrabotki90Count'].forEach(id => { const el = document.getElementById(id); if (el) el.readOnly = !!otrAuto; });
   document.getElementById('loanVal').textContent = fmt(loanPay);
   document.getElementById('loanList').textContent = creditsState.list.length + ' кредита · закрыть к ' + creditsState.target.split('-').reverse().join('.');
   document.getElementById('fixedTotal').textContent = fmt(fixedTotal);
@@ -2086,7 +2144,7 @@ function render() {
     let tRevenue = 0, tFot = 0, tHands = 0, tDeposit = 0, tPupils = 0;
 
     tGroups.forEach(g => {
-      if (state.inactive && state.inactive[g.i]) return;
+      if (!isActive(g.i)) return;
       const c = calcGroup(g.i);
       tRevenue += c.revenue; tFot += c.fot; tHands += c.hands;
       tDeposit += c.deposit; tPupils += (state.pupils[g.i] || 0);
@@ -2103,7 +2161,7 @@ function render() {
         <div class="teacher-avatar" style="background:${color}">${initials}</div>
         <div>
           <div class="teacher-name">${teacher}</div>
-          <div class="teacher-meta">${tGroups.length} групп · ${tPupils} учеников</div>
+          <div class="teacher-meta">${tGroups.filter(g => isActive(g.i)).length} групп · ${tPupils} учеников</div>
         </div>
         <div class="teacher-total">
           <div class="teacher-total-label">На руки</div>
@@ -2133,16 +2191,17 @@ function render() {
     const tbody = block.querySelector('tbody');
 
     tGroups.forEach(g => {
-      const inactive = state.inactive && state.inactive[g.i];
+      const inactive = !isActive(g.i);
+      const missing = crmMissing(g.i);
       const c = inactive ? { revenue: 0, fot: 0, deposit: 0, hands: 0 } : calcGroup(g.i);
       const p = state.pupils[g.i] || 0;
       const tr = document.createElement('tr');
       if (inactive) tr.style.opacity = '0.4';
       tr.innerHTML = `
         <td class="group-name">
-          <label style="display:inline-flex;align-items:center;gap:6px;cursor:pointer" title="Снять галочку — группа не открыта, не идёт в отпускные и расчёты">
-            <input type="checkbox" ${inactive ? '' : 'checked'} onchange="toggleActive(${g.i}, this.checked)" style="cursor:pointer">
-            <span class="pupils-status ${statusDot(p)}"></span>${g.name}
+          <label style="display:inline-flex;align-items:center;gap:6px;cursor:pointer" title="${missing ? 'В CRM нет начислений за этот месяц — группа не считается' : 'Снять галочку — группа не идёт в этом месяце'}">
+            <input type="checkbox" ${inactive ? '' : 'checked'} ${missing ? 'disabled' : ''} onchange="toggleActive(${g.i}, this.checked)" style="cursor:pointer">
+            <span class="pupils-status ${statusDot(p)}"></span>${g.name}${missing ? ' <span style="color:#E8740A;font-size:11px">· нет начислений в CRM</span>' : ''}
           </label>
         </td>
         <td><span class="badge badge-${g.dur}">${g.dur} мин</span></td>
@@ -2201,9 +2260,10 @@ function set(i, val) {
 
 // Ручная правка числа детей отвязывает группу от суммы из CRM:
 // иначе выручка берётся из CRM и не реагирует на изменение детей.
-function toggleActive(i, isActive) {
-  if (!state.inactive) state.inactive = {};
-  if (isActive) delete state.inactive[i]; else state.inactive[i] = true;
+function toggleActive(i, on) {
+  const ym = curYM();
+  state.offM[ym] = state.offM[ym] || {};
+  if (on) delete state.offM[ym][i]; else state.offM[ym][i] = true;
   render();
 }
 function detachCrm(i) {
@@ -2226,9 +2286,15 @@ function monthSnapshot(rec) {
   return rec.pupils ? rec : { pupils: rec, o60: 0, o90: 0 };
 }
 
+function teacherHandsFor(month) {
+  const th = {};
+  GROUPS.forEach((g, i) => { th[g.teacher] = (th[g.teacher] || 0) + calcGroup(i, month).hands; });
+  return th;
+}
 function storeMonth(month) {
   const h = getHistory();
   h[month] = {
+    th: teacherHandsFor(month),
     pupils: { ...state.pupils },
     o60: fixedState.otrabotki60 || 0,
     o90: fixedState.otrabotki90 || 0,
@@ -2295,6 +2361,16 @@ const now = new Date();
 picker.value = localStorage.getItem('ss_last_month') || now.toISOString().slice(0, 7);
 setTimeout(fetchFinanceData, 100);
 setTimeout(fetchOtrSavings, 200);
+setTimeout(bbQuietRefresh, 300);
+async function bbQuietRefresh() {
+  const token = localStorage.getItem('bbToken') || '';
+  if (!token || !useCrmRevenue() || window.__bbFromHash) return;   // из закладки данные уже свежее
+  try {
+    const r = await fetch(BB_SERVER + '?t=' + encodeURIComponent(token), { cache: 'no-store' });
+    const d = await r.json();
+    if (d && d.ok && Array.isArray(d.list)) applyBigBen(d.list);
+  } catch (e) {}
+}
 
 const monthNames = ['январь','февраль','март','апрель','май','июнь',
   'июль','август','сентябрь','октябрь','ноябрь','декабрь'];
@@ -2338,6 +2414,7 @@ renderPremiumBlock();
   const el = document.getElementById(key + 'Count');
   if (!el) return;
   el.addEventListener('input', function() {
+    if (otrCounts(picker.value)) { render(); return; }   // счётчики идут из вкладки «Отработки»
     const n = parseFloat(this.value);
     if (!isNaN(n) && n >= 0) {
       fixedState[key] = Math.round(n * 10) / 10;
@@ -2369,6 +2446,7 @@ document.addEventListener('click', function(e) {
       }
     }
     if (action === 'fixedCounter') {
+      if (otrCounts(picker.value)) return;   // счётчики идут из вкладки «Отработки»
       const key = hBtn.dataset.key;
       const delta = parseFloat(hBtn.dataset.delta);
       fixedState[key] = Math.round(Math.max(0, (fixedState[key] || 0) + delta) * 10) / 10;
@@ -2439,23 +2517,15 @@ function renderHistoryModal() {
   const teachers = [...new Set(GROUPS.map(g => g.teacher))];
 
   list.innerHTML = keys.map(month => {
-    const pupils = h[month];
-    // calc totals per teacher for this month
+    const rec = monthSnapshot(h[month]);
     const teacherSummary = teachers.map(teacher => {
-      const tGroups = GROUPS.map((g, i) => ({...g, i})).filter(g => g.teacher === teacher);
-      let hands = 0;
-      tGroups.forEach(g => {
-        const p = pupils[g.i] || 0;
-        const revenue = p * TARIFF[g.dur];
-        const fot = Math.round(revenue * TEACHER_PCT);
-        hands += Math.max(0, fot - DEPOSIT);
-      });
+      const hands = rec && rec.th && rec.th[teacher] != null ? rec.th[teacher] : null;   // старые записи без расчёта — «—»
       const color = TEACHER_COLORS[teacher];
       const initials = TEACHER_INITIALS[teacher];
       return `<div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">
         <div style="width:22px;height:22px;border-radius:50%;background:${color};color:#fff;font-size:9px;font-weight:700;display:flex;align-items:center;justify-content:center">${initials}</div>
         <span style="font-size:12px;color:var(--gray-600);flex:1">${teacher.split(' ')[0]}</span>
-        <span style="font-family:var(--mono);font-size:13px;font-weight:600;color:${color}">${fmt(hands)}</span>
+        <span style="font-family:var(--mono);font-size:13px;font-weight:600;color:${color}">${hands == null ? '—' : fmt(hands)}</span>
       </div>`;
     }).join('');
 
@@ -2492,16 +2562,11 @@ function slipHistory(teacher) {
   const tGroupIdxs = GROUPS.map((g, i) => ({...g, i})).filter(g => g.teacher === teacher);
 
   const rows = keys.map(month => {
-    const pupils = h[month];
-    let hands = 0;
-    tGroupIdxs.forEach(g => {
-      const p = pupils[g.i] || 0;
-      const rev = p * TARIFF[g.dur];
-      hands += Math.max(0, Math.round(rev * TEACHER_PCT) - DEPOSIT);
-    });
+    const rec = monthSnapshot(h[month]);
+    const hands = rec && rec.th && rec.th[teacher] != null ? rec.th[teacher] : null;
     return `<tr>
       <td style="padding:6px 8px;font-size:12px;color:var(--gray-600)">${fmtMonth(month)}</td>
-      <td style="padding:6px 8px;font-size:13px;font-weight:600;text-align:right;font-family:var(--mono);color:${color}">${fmt(hands)}</td>
+      <td style="padding:6px 8px;font-size:13px;font-weight:600;text-align:right;font-family:var(--mono);color:${color}">${hands == null ? '—' : fmt(hands)}</td>
     </tr>`;
   }).join('');
 
@@ -2653,7 +2718,7 @@ function adminAbonbackCount() {
 function adminNumbers() {
   let revenue = 0;
   GROUPS.forEach((g, i) => {
-    if (state.inactive && state.inactive[i]) return;   // не открытые группы не считаем — как на дашборде (иначе квиток завышал выручку)
+    if (!isActive(i)) return;   // только группы, что идут в выручку месяца — как на дашборде
     revenue += calcGroup(i).revenue;
   });
   const abonback = adminAbonback();                    // возврат абонементных скидок (активных в этом месяце)
@@ -2847,7 +2912,7 @@ function openSlip(teacher) {
   const monthName = monthNames[parseInt(m) - 1];
   const period = monthName.charAt(0).toUpperCase() + monthName.slice(1) + ' ' + y;
 
-  const tGroups = GROUPS.map((g, i) => ({ ...g, i })).filter(g => g.teacher === teacher && !(state.inactive && state.inactive[g.i]));
+  const tGroups = GROUPS.map((g, i) => ({ ...g, i })).filter(g => g.teacher === teacher && isActive(g.i));
   let tRevenue = 0, tFot = 0, tHands = 0, tDeposit = 0, tPupils = 0;
 
   tGroups.forEach(g => {
@@ -2950,7 +3015,7 @@ function printSlip() {
   const period = monthName.charAt(0).toUpperCase() + monthName.slice(1) + ' ' + y;
   const monthNum = m + '.' + y;
 
-  const tGroups = GROUPS.map((g, i) => ({...g, i})).filter(g => g.teacher === teacher && !(state.inactive && state.inactive[g.i]));
+  const tGroups = GROUPS.map((g, i) => ({...g, i})).filter(g => g.teacher === teacher && isActive(g.i));
   let tRevenue = 0, tFot = 0, tHands = 0, tDeposit = 0;
   tGroups.forEach(g => {
     const c = calcGroup(g.i);
@@ -3064,7 +3129,7 @@ function copySlip() {
   const teacher = currentSlipTeacher;
   const period = document.querySelector('.slip-period')?.textContent || '';
 
-  const tGroups = GROUPS.map((g, i) => ({ ...g, i })).filter(g => g.teacher === teacher && !(state.inactive && state.inactive[g.i]));
+  const tGroups = GROUPS.map((g, i) => ({ ...g, i })).filter(g => g.teacher === teacher && isActive(g.i));
   let tFot = 0, tHands = 0, tDeposit = 0;
   let lines = [`Расчётный лист · Speak&Smile\n${teacher} · ${period}\n`];
   lines.push('─'.repeat(44));
@@ -3128,6 +3193,27 @@ function applyBigBen(rawList) {
   const monTag = haveMonths.indexOf(wanted) >= 0 ? wanted : (haveMonths[haveMonths.length - 1] || '');
   const revNow = monTag ? (revByMonth[monTag] || {}) : {};
   const monthMismatch = wanted && monTag && wanted !== monTag;
+  if (useCrmRevenue()) {
+    Object.keys(revByMonth).forEach(ym => {
+      const acc = revByMonth[ym];
+      if (!acc) return;
+      const m = {};
+      Object.keys(acc).forEach(name => {
+        const i = bbMatch(name), cell = acc[name];
+        if (i < 0 || !cell) return;                     // отработки/консультации в калькуляторе нет — не берём
+        let rub = null;
+        // РЕАЛЬНАЯ «К оплате» из BigBen — с учётом ВСЕХ скидок, включая длинные абонементы
+        if (cell[0] != null && !isNaN(+cell[0])) rub = +cell[0];
+        else if (cell[3] && typeof cell[3] === 'object') {   // запасной: тариф × скидка % каждого ученика
+          rub = 0;
+          Object.entries(cell[3]).forEach(([pc, cnt]) => { rub += TARIFF[GROUPS[i].dur] * (1 - (+pc) / 100) * (+cnt); });
+          rub = Math.round(rub);
+        }
+        if (rub !== null) m[i] = (m[i] || 0) + rub;
+      });
+      state.crmRevM[ym] = m;
+    });
+  }
   list.forEach(item => {
     const name = item.n || item.name, pupils = +(item.p !== undefined ? item.p : item.pupils);
     const i = bbMatch(name);
@@ -3136,33 +3222,12 @@ function applyBigBen(rawList) {
     const was = state.pupils[i] || 0;
     if (was !== pupils) { state.pupils[i] = pupils; changed.push(GROUPS[i].name + ': ' + was + ' → ' + pupils); }
     else same.push(GROUPS[i].name);
-    // выручка из отчёта CRM — уже со скидками, но только если это включено тумблером
-    const cell = revNow[name] || (item.r !== undefined ? [item.r, item.d, item.f, item.pcts] : null);
-    if (useCrmRevenue() && cell) {
-      const price = TARIFF[GROUPS[i].dur];
-      const pcts = cell[3];
-      let rub = null;
-      if (cell[0] != null && !isNaN(+cell[0])) {
-        // РЕАЛЬНАЯ «К оплате» из BigBen — сколько родители реально платят с учётом
-        // ВСЕХ скидок, включая длинные абонементы (9/6/3 мес). BigBen размазывает
-        // абонемент по месяцам, так что это точная месячная сумма. ЗП считаем от неё.
-        rub = Math.round(+cell[0]);
-      } else if (pcts && typeof pcts === 'object') {
-        // запасной вариант, если BigBen не отдал сумму: тариф × скидка % каждого ученика
-        rub = 0;
-        Object.entries(pcts).forEach(([pc, cnt]) => { rub += price * (1 - (+pc) / 100) * (+cnt); });
-        rub = Math.round(rub);
-      }
-      if (rub !== null) {
-        state.crmRev[i] = rub;
-        const full = pupils * price;
-        const note = (cell[1] ? ', со скидкой: ' + cell[1] : '') + (cell[2] ? ', бесплатно: ' + cell[2] : '');
-        money.push(GROUPS[i].name + ': ' + fmt(rub) + (full !== rub ? ' (без скидок ' + fmt(full) + ')' : '') + note);
-      } else {
-        delete state.crmRev[i];
-      }
-    } else {
-      delete state.crmRev[i];
+    const rub = (state.crmRevM[monTag] || {})[i];
+    const cell = revNow[name];
+    if (useCrmRevenue() && rub != null) {
+      const full = pupils * TARIFF[GROUPS[i].dur];
+      const note = cell ? (cell[1] ? ', со скидкой: ' + cell[1] : '') + (cell[2] ? ', бесплатно: ' + cell[2] : '') : '';
+      money.push(GROUPS[i].name + ': ' + fmt(rub) + (full !== rub ? ' (без скидок ' + fmt(full) + ')' : '') + note);
     }
   });
   GROUPS.forEach((g, i) => { if (!touched.has(i)) missed.push(g.name); });
@@ -3330,6 +3395,7 @@ function closeBigBenOverlay(e) { if (e.target.id === 'bigbenModal') closeBigBenM
   try {
     const list = JSON.parse(decodeURIComponent(escape(atob(m[1]))));
     history.replaceState(null, '', location.pathname);
+    window.__bbFromHash = true;
     openBigBenModal();
     applyBigBen(list);
     // Досылаем снимок на сервер, чтобы ТЕЛЕФОН увидел свежую выручку.
