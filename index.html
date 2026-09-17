@@ -957,6 +957,14 @@
   </div>
 
   <!-- ОТРАБОТКИ: ЭКОНОМИЯ vs ПЕРЕРАСЧЁТ (видит только владелец — Инга эту страницу не открывает) -->
+  <div class="admin-block" id="cashCard" style="flex-direction:column;gap:0;padding:0;overflow:hidden;display:none">
+    <div style="padding:14px var(--px);background:var(--gray-50);border-bottom:1.5px solid var(--gray-100)">
+      <div style="font-size:13px;font-weight:700;color:var(--gray-900)">🏦 Касса и выплаты</div>
+      <div id="cashSub" style="font-size:11px;color:var(--gray-400);margin-top:1px"></div>
+    </div>
+    <div id="cashBody" style="padding:2px 0"></div>
+  </div>
+
   <div class="admin-block" id="otrSavingsCard" style="flex-direction:column;gap:0;padding:0;overflow:hidden;display:none">
     <div style="padding:14px var(--px);background:var(--gray-50);border-bottom:1.5px solid var(--gray-100);display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap">
       <div>
@@ -1290,6 +1298,13 @@
           display:inline-block;font-family:var(--font);font-size:13px;font-weight:700;
           padding:10px 18px;border-radius:22px;background:var(--purple);color:#fff;
           text-decoration:none;cursor:grab">⬇️ BigBen → калькулятор</a>
+      </p>
+      <p style="text-align:center;margin:0 0 6px;font-size:12px;color:var(--gray-600)">Оплаты по счетам (касса по месяцам) — раз в неделю и перед выплатой ЗП, собирается 2–3 минуты:</p>
+      <p style="text-align:center;margin:0 0 10px">
+        <a id="bbPayLink" href="#" onclick="return false" style="
+          display:inline-block;font-family:var(--font);font-size:13px;font-weight:700;
+          padding:10px 18px;border-radius:22px;background:#0EA5A0;color:#fff;
+          text-decoration:none;cursor:grab">💳 BigBen → оплаты</a>
       </p>
       <p id="bbServerNote" style="text-align:center;margin:0 0 10px;font-size:12px;color:var(--gray-600);min-height:15px"></p>
       <p style="text-align:center;margin:0 0 14px">
@@ -1855,6 +1870,89 @@ async function loadFinanceCsv(files){
   alert('Загружено — '+msg.join(', ')+'. Смотри карточки «Реально пришло» и «Расходы факт».');
 }
 
+// ===== ОПЛАТЫ ПО СЧЕТАМ (закладка «BigBen → оплаты») =====
+// Счёт: [группа, uid, оплачено с, оплачено до, сумма, статус p/u/o, дата оплаты]. Месяц счёта — на который
+// приходится бОльшая часть периода «с—по»; длинный абонемент (период > 45 дней) делится поровну по месяцам.
+// «Перенос»/«ручная корректировка» (статус o) — не новые деньги, не считаем.
+const MON_RU_S = {'янв':1,'фев':2,'мар':3,'апр':4,'мая':5,'май':5,'июн':6,'июл':7,'авг':8,'сен':9,'окт':10,'ноя':11,'дек':12};
+function ruDate(s) {
+  const m = String(s || '').match(/(\d{1,2})\s+([а-яё]{3})[а-яё]*\s+(\d{4})/i);
+  if (m && MON_RU_S[m[2].toLowerCase()]) return new Date(Date.UTC(+m[3], MON_RU_S[m[2].toLowerCase()] - 1, +m[1]));
+  const n = String(s || '').match(/(\d{2})[.\-](\d{2})[.\-](\d{4})/);
+  return n ? new Date(Date.UTC(+n[3], +n[2] - 1, +n[1])) : null;
+}
+function ymOf(d) { return d.getUTCFullYear() + '-' + String(d.getUTCMonth() + 1).padStart(2, '0'); }
+function invMonths(from, to) {
+  const a = ruDate(from), b = ruDate(to);
+  if (!a || !b) return [];
+  if (b <= a) return [ymOf(a)];
+  if ((b - a) / 864e5 <= 45) {
+    const cnt = {};
+    for (let t = a.getTime(); t < b.getTime(); t += 864e5) { const k = ymOf(new Date(t)); cnt[k] = (cnt[k] || 0) + 1; }
+    return [Object.entries(cnt).sort((x, y) => y[1] - x[1])[0][0]];
+  }
+  const s = new Date(a.getTime() + 15 * 864e5), e = new Date(b.getTime() - 15 * 864e5), out = [];
+  let y = s.getUTCFullYear(), m = s.getUTCMonth();
+  while (y * 12 + m <= e.getUTCFullYear() * 12 + e.getUTCMonth()) { out.push(y + '-' + String(m + 1).padStart(2, '0')); m++; if (m > 11) { m = 0; y++; } }
+  return out;
+}
+function payByMonth() {
+  let d = null; try { d = JSON.parse(localStorage.getItem('ss_pay') || 'null'); } catch (e) {}
+  if (!d || !Array.isArray(d.inv)) return null;
+  const paid = {}, unpaid = {}, unpaidN = {}, refunds = {};
+  d.inv.forEach(x => {
+    const months = invMonths(x[2], x[3]); if (!months.length) return;
+    const part = (+x[4] || 0) / months.length;
+    months.forEach(k => {
+      if (x[5] === 'p') paid[k] = (paid[k] || 0) + part;
+      else if (x[5] === 'u') { unpaid[k] = (unpaid[k] || 0) + part; unpaidN[k] = (unpaidN[k] || 0) + 1; }
+    });
+  });
+  (d.ref || []).forEach(r => { const t = ruDate(r[3]); if (t) { const k = ymOf(t); refunds[k] = (refunds[k] || 0) + (+r[2] || 0); } });
+  return { at: d.at, paid, unpaid, unpaidN, refunds };
+}
+function paidNet(pb, ym) { return Math.round((pb.paid[ym] || 0) - (pb.refunds[ym] || 0)); }
+async function fetchPayData() {
+  const token = localStorage.getItem('bbToken') || ''; if (!token || window.__payFromHash) return;
+  try {
+    const r = await fetch('https://ss-bb.o-sintsova.workers.dev/pay-data?t=' + encodeURIComponent(token), { cache: 'no-store' });
+    const d = await r.json();
+    if (d && d.ok && d.data && Array.isArray(d.data.inv)) { localStorage.setItem('ss_pay', JSON.stringify(d.data)); render(); }
+  } catch (e) {}
+}
+const MONTH_GEN = ['января','февраля','марта','апреля','мая','июня','июля','августа','сентября','октября','ноября','декабря'];
+// ЗП за месяц X платится до 5-го числа X+1 из оплат ЗА X+1; ЗП за май — из оплат за сентябрь (вносят до 10.06).
+function renderCash(t) {
+  const card = document.getElementById('cashCard'); if (!card) return;
+  const pb = payByMonth(); if (!pb) { card.style.display = 'none'; return; }
+  const ym = picker.value, [y, m] = ym.split('-').map(Number);
+  const nextY = m === 12 ? y + 1 : y, nextM = m === 12 ? 1 : m + 1;
+  const src = m === 5 ? y + '-09' : nextY + '-' + String(nextM).padStart(2, '0');
+  const srcName = monthNames[+src.slice(5) - 1] + ' ' + src.slice(0, 4);
+  const came = paidNet(pb, src), notYet = Math.round(pb.unpaid[src] || 0), notYetN = pb.unpaidN[src] || 0;
+  const salaries = t.hands + t.admin + t.otr;
+  const other = t.fixed - t.admin - t.otr - t.deposit;
+  const row = (label, sub, val, color) => '<div style="display:flex;justify-content:space-between;gap:10px;padding:10px var(--px);border-bottom:1px solid var(--gray-100);flex-wrap:wrap">'
+    + '<div style="min-width:180px"><div style="font-size:13px;font-weight:600;color:var(--gray-900)">' + label + '</div>' + (sub ? '<div style="font-size:11px;color:var(--gray-400)">' + sub + '</div>' : '') + '</div>'
+    + '<div style="font-family:var(--mono);font-size:15px;font-weight:700;color:' + (color || 'var(--gray-900)') + '">' + val + '</div></div>';
+  let html = '';
+  if (m >= 6 && m <= 8) {
+    html = row('Летом зарплат нет', 'ЗП за май выплачивается в начале июня из оплат за сентябрь', '—');
+  } else {
+    html += row('Пришло в кассу за ' + srcName, 'оплаченные счета за этот месяц' + (notYet ? ' · ещё не оплачено ' + fmt(notYet) + ' (' + notYetN + ' сч.)' : ''), fmt(came), 'var(--green)');
+    html += row('ЗП за ' + monthNames[m - 1] + ' — выплатить до 5 ' + MONTH_GEN[nextM - 1], 'педагоги на руки ' + fmt(t.hands) + ' · администратор ' + fmt(t.admin) + ' · отработки ' + fmt(t.otr), '−' + fmt(salaries), 'var(--red)');
+    const left1 = came - salaries;
+    html += row('Остаётся после ЗП', left1 >= 0 ? 'на зарплаты хватает' : 'на зарплаты не хватает', fmt(left1), left1 >= 0 ? 'var(--green)' : 'var(--red)');
+    html += row('Прочие выплаты месяца', 'аренда, уборка, SMM, налоги, расходы, кредиты (депозит остаётся в школе)', '−' + fmt(other), 'var(--red)');
+    const left2 = left1 - other;
+    html += row('Остаётся после всех выплат', m === 5 ? 'ЗП за май — из оплат за сентябрь (до 10.06 по договору)' : '', fmt(left2), left2 >= 0 ? 'var(--green)' : 'var(--red)');
+  }
+  document.getElementById('cashBody').innerHTML = html;
+  const at = pb.at ? new Date(pb.at).toLocaleString('ru-RU', { day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' }) : '';
+  document.getElementById('cashSub').textContent = 'ЗП за месяц платится до 5-го из оплат за следующий месяц · счета из CRM' + (at ? ' на ' + at : '');
+  card.style.display = '';
+}
+
 async function fetchFinanceData(){
   const token=localStorage.getItem('bbToken')||''; if(!token) return;
   try{
@@ -1942,7 +2040,9 @@ function renderFinance() {
   const ym = picker.value;
   const p = paid[ym], sp = spent[ym];
   const rev = (lastTotals && lastTotals.revenue) || 0;
-  const pe=document.getElementById('paidReal'); if(pe){ pe.textContent = p!=null?fmt(Math.round(p)):'—'; }
+  const pb=payByMonth();
+  const pNet = pb ? paidNet(pb, ym) : null;
+  const pe=document.getElementById('paidReal'); if(pe){ pe.textContent = pb ? fmt(pNet) : (p!=null?fmt(Math.round(p)):'—'); }
   const se=document.getElementById('spentReal'); if(se){ se.textContent = sp!=null?fmt(Math.round(sp)):'—'; }
   const de=document.getElementById('debtReal'), ds=document.getElementById('debtSub');
   let debtMap={}; try{ debtMap=JSON.parse(localStorage.getItem('ss_debt')||'{}'); }catch(e){}
@@ -1961,7 +2061,8 @@ function renderFinance() {
     } else { de.textContent='—'; if(ds) ds.textContent='обнови данные'; }
   }
   const ps=document.getElementById('paidSub');
-  if(ps && p!=null && rev) ps.textContent = Math.round(p/rev*100)+'% от начисленного';
+  if(ps && pb && rev) ps.textContent = Math.round(pNet/rev*100)+'% от начисленного · по счетам' + (pb.unpaid[ym] ? ' · не оплачено ' + fmt(Math.round(pb.unpaid[ym])) : '');
+  else if(ps && p!=null && rev) ps.textContent = Math.round(p/rev*100)+'% от начисленного';
 }
 
 function render() {
@@ -2283,6 +2384,8 @@ function render() {
     tbody.appendChild(sumTr);
   });
 
+  renderCash({ hands: totalHands, admin: adminPay, otr: otrabotkiPay, fixed: fixedTotal, deposit: totalDeposit });
+
   // Save current state
   localStorage.setItem('ss_salary_state', JSON.stringify(state));
   // и сразу пишем снимок выбранного месяца, чтобы он нашёлся потом
@@ -2411,6 +2514,7 @@ picker.value = localStorage.getItem('ss_last_month') || now.toISOString().slice(
 setTimeout(fetchFinanceData, 100);
 setTimeout(fetchOtrSavings, 200);
 setTimeout(bbQuietRefresh, 300);
+setTimeout(fetchPayData, 400);
 async function bbQuietRefresh() {
   const token = localStorage.getItem('bbToken') || '';
   if (!token || !useCrmRevenue() || window.__bbFromHash) return;   // из закладки данные уже свежее
@@ -3412,6 +3516,87 @@ function copyBookmarklet(btn) {
 }
 function closeBigBenModal() { document.getElementById('bigbenModal').classList.remove('open'); }
 function closeBigBenOverlay(e) { if (e.target.id === 'bigbenModal') closeBigBenModal(); }
+
+// Закладка «💳 BigBen → оплаты»: обходит группы и счета учеников в браузере (серверу BigBen отдаёт
+// их слишком медленно) и открывает калькулятор с #pay=… ; калькулятор досылает данные на сервер.
+async function __payScan(target) {
+  try {
+    if (!location.host.includes('bigbencrm.ru')) { alert('Открой сначала BigBen: panel.bigbencrm.ru'); return; }
+    const note = document.createElement('div');
+    note.style.cssText = 'position:fixed;top:12px;right:12px;z-index:999999;background:#0EA5A0;color:#fff;padding:10px 14px;border-radius:12px;font:14px sans-serif';
+    document.body.appendChild(note);
+    const say = (t) => { note.textContent = '💳 ' + t; };
+    const P = async (u) => { const d = new DOMParser().parseFromString(await (await fetch(u, { credentials: 'include' })).text(), 'text/html'); d.querySelectorAll('script,style').forEach((x) => x.remove()); return d; };
+    const groups = {};
+    for (const f of ['current', 'future']) {
+      const gl = await P('/admin/index.php?obj=groups&filter=' + f);
+      gl.querySelectorAll('a').forEach((a) => { const m = (a.getAttribute('href') || '').match(/action=edit&group_id=(\d+)/); const t = a.textContent.replace(/\s+/g, ' ').trim(); if (m && t) groups[m[1]] = t; });
+    }
+    const gids = Object.keys(groups), pairs = [];
+    for (let i = 0; i < gids.length; i++) {
+      say('группы ' + (i + 1) + '/' + gids.length);
+      const g = await P('/admin/index.php?obj=groups&action=edit&group_id=' + gids[i]);
+      const cap = ((g.querySelector('[name="groups[caption]"]') || {}).value || groups[gids[i]]).trim();
+      if (/консультац/i.test(cap)) continue;
+      new Set([...g.querySelectorAll('a')].map((a) => ((a.getAttribute('href') || '').match(/edituser&user_id=(\d+)/) || [])[1]).filter(Boolean))
+        .forEach((u) => pairs.push([gids[i], cap, u]));
+    }
+    const inv = [], ref = []; let k = 0;
+    const w = async () => {
+      while (k < pairs.length) {
+        const [gid, cap, uid] = pairs[k++];
+        say('счета ' + k + '/' + pairs.length);
+        try {
+          const d = await P('/admin/index.php?obj=groups&action=get_groups_user_payments&group_id=' + gid + '&user_id=' + uid);
+          const ts = d.querySelectorAll('table');
+          if (ts[0]) [...ts[0].querySelectorAll('tr')].slice(1).forEach((tr) => {
+            const c = [...tr.children]; if (c.length < 9) return;
+            const tx = (i) => c[i].textContent.replace(/\s+/g, ' ').trim();
+            if (!/^\S{1,4}-\d+/.test(tx(0))) return;
+            const st = tx(8);
+            inv.push([cap, uid, tx(2), tx(3), parseFloat(tx(5)) || 0, /^оплачено/i.test(st) ? 'p' : /^не оплачено/i.test(st) ? 'u' : 'o', (st.match(/\d{2}-\d{2}-\d{4}/) || [''])[0]]);
+          });
+          if (ts[1]) [...ts[1].querySelectorAll('tr')].slice(1).forEach((tr) => {
+            const c = [...tr.children].map((x) => x.textContent.replace(/\s+/g, ' ').trim());
+            if (c.length >= 6 && parseFloat(c[1]) > 0) ref.push([cap, uid, parseFloat(c[1]), c[5]]);
+          });
+        } catch (e) {}
+      }
+    };
+    await Promise.all([w(), w(), w(), w()]);
+    say('готово: ' + inv.length + ' счетов — открываю калькулятор');
+    window.open(target + '#pay=' + btoa(unescape(encodeURIComponent(JSON.stringify({ at: new Date().toISOString(), pairs: pairs.length, inv, ref })))), '_blank');
+  } catch (e) { alert('Ошибка: ' + e.message); }
+}
+(function buildPayBookmarklet() {
+  const LIVE = 'https://osintsova-dot.github.io/Salary-calculator-/';
+  const target = /^https?:\/\/(127\.|localhost)/.test(location.href) || location.protocol === 'file:' ? LIVE : (location.origin + location.pathname);
+  const a = document.getElementById('bbPayLink');
+  if (a) a.setAttribute('href', 'javascript:' + encodeURIComponent('(' + __payScan.toString() + ')(' + JSON.stringify(target) + ')'));
+})();
+// Приехали оплаты ссылкой — сохраняем, досылаем на сервер (для телефона), пересчитываем
+(function importPayFromHash() {
+  const m = (location.hash || '').match(/^#pay=(.+)$/);
+  if (!m) return;
+  try {
+    const data = JSON.parse(decodeURIComponent(escape(atob(m[1]))));
+    history.replaceState(null, '', location.pathname);
+    window.__payFromHash = true;
+    localStorage.setItem('ss_pay', JSON.stringify(data));
+    render();
+    const token = localStorage.getItem('bbToken') || '';
+    if (token) fetch('https://ss-bb.o-sintsova.workers.dev/pay-data?t=' + encodeURIComponent(token), {
+      method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(data),
+    }).then(r => r.json()).then(d => { payToast(d && d.ok ? '✅ Оплаты загружены: ' + data.inv.length + ' счетов · отправлено на сервер, телефон обновится' : '⚠️ Оплаты применены, но на сервер не отправились'); })
+      .catch(() => payToast('⚠️ Оплаты применены, но на сервер не отправились'));
+    else payToast('✅ Оплаты загружены: ' + data.inv.length + ' счетов');
+  } catch (e) { payToast('⚠️ Не смог прочитать оплаты из ссылки: ' + e.message); }
+  function payToast(t) {
+    const n = document.createElement('div');
+    n.style.cssText = 'position:fixed;left:50%;top:14px;transform:translateX(-50%);z-index:9999;background:#0EA5A0;color:#fff;padding:10px 16px;border-radius:12px;font:600 13px var(--font);box-shadow:0 6px 20px rgba(0,0,0,.2);max-width:90vw';
+    n.textContent = t; document.body.appendChild(n); setTimeout(() => n.remove(), 7000);
+  }
+})();
 
 // Ссылка-закладка: собираем javascript: URL один раз при загрузке
 (function buildBookmarklet() {
