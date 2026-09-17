@@ -1418,6 +1418,7 @@ const FIXED_DEFAULTS = { cleaning: 33000, smm: 18000, rent: 200000, adminMin: 80
     { name: 'Осиян Тимур',      disc: 1500, from: '2026-09', until: '2027-05', group: 'Prepare 4A' },
     { name: 'Елькина',          disc: 1500, from: '2026-09', until: '2027-05', group: 'Prepare 3A' },
     { name: 'Цупрун',           disc: 500,  from: '2026-09', until: '2026-11', group: 'Get Involved 2A' },
+    { name: 'Юрченко Дмитрий',  disc: 1500, from: '2026-09', until: '2027-05', group: 'Gateway B2' },
   ] };
 // Налоги и взносы: даты платежей, а не начисления. Правится кнопкой «список».
 const COST_DEFAULTS = [
@@ -1564,6 +1565,9 @@ let fixedState = Object.assign({}, FIXED_DEFAULTS, JSON.parse(localStorage.getIt
 (function () {
   const G = { 'мурзагулов': 'GMF 1A', 'панкова': 'GMF 2B', 'батяновск': 'GMF 2B', 'ботяновск': 'GMF 2B', 'колесникова': 'GMF 2A',
               'погорелова': 'GMF 3B', 'осиян': 'Prepare 4A', 'елькина': 'Prepare 3A', 'цупрун': 'Get Involved 2A' };
+  // найден по счетам CRM 17.09 (76 500 за 9 мес) — добавить в сохранённый список, если его там нет
+  if (Array.isArray(fixedState.abonements) && !fixedState.abonements.some(e => /юрченко/i.test((e && e.name) || '')))
+    fixedState.abonements.push({ name: 'Юрченко Дмитрий', disc: 1500, from: '2026-09', until: '2027-05', group: 'Gateway B2' });
   (fixedState.abonements || []).forEach(e => {
     if (!e || e.group) return;
     const k = Object.keys(G).find(x => (e.name || '').toLowerCase().indexOf(x) === 0);
@@ -1886,7 +1890,7 @@ function invMonths(from, to) {
   const a = ruDate(from), b = ruDate(to);
   if (!a || !b) return [];
   if (b <= a) return [ymOf(a)];
-  if ((b - a) / 864e5 <= 45) {
+  if ((b - a) / 864e5 <= 70) {                       // обычный счёт (в т.ч. на 1,5 месяца по урокам)
     const cnt = {};
     for (let t = a.getTime(); t < b.getTime(); t += 864e5) { const k = ymOf(new Date(t)); cnt[k] = (cnt[k] || 0) + 1; }
     return [Object.entries(cnt).sort((x, y) => y[1] - x[1])[0][0]];
@@ -1930,6 +1934,8 @@ function renderCash(t) {
   const src = m === 5 ? y + '-09' : nextY + '-' + String(nextM).padStart(2, '0');
   const srcName = monthNames[+src.slice(5) - 1] + ' ' + src.slice(0, 4);
   const came = paidNet(pb, src), notYet = Math.round(pb.unpaid[src] || 0), notYetN = pb.unpaidN[src] || 0;
+  // ожидается за месяц-источник = начислено по абонементам (если CRM уже отдала этот месяц)
+  const expected = monthCrm(src) ? GROUPS.reduce((a, g, i) => a + (isActive(i, src) ? calcGroup(i, src).revenue : 0), 0) : null;
   const salaries = t.hands + t.admin + t.otr;
   const other = t.fixed - t.admin - t.otr - t.deposit;
   const row = (label, sub, val, color) => '<div style="display:flex;justify-content:space-between;gap:10px;padding:10px var(--px);border-bottom:1px solid var(--gray-100);flex-wrap:wrap">'
@@ -1939,13 +1945,15 @@ function renderCash(t) {
   if (m >= 6 && m <= 8) {
     html = row('Летом зарплат нет', 'ЗП за май выплачивается в начале июня из оплат за сентябрь', '—');
   } else {
-    html += row('Пришло в кассу за ' + srcName, 'оплаченные счета за этот месяц' + (notYet ? ' · ещё не оплачено ' + fmt(notYet) + ' (' + notYetN + ' сч.)' : ''), fmt(came), 'var(--green)');
+    if (expected != null) html += row('Ожидается за ' + srcName, 'начислено по абонементам — столько должно прийти', fmt(expected));
+    html += row('Уже пришло за ' + srcName, (expected ? Math.round(came / expected * 100) + '% от ожидаемого · ' : '') + 'оплаченные счета' + (notYet ? ' · выставлено и не оплачено ' + fmt(notYet) + ' (' + notYetN + ' сч.)' : ''), fmt(came), 'var(--green)');
     html += row('ЗП за ' + monthNames[m - 1] + ' — выплатить до 5 ' + MONTH_GEN[nextM - 1], 'педагоги на руки ' + fmt(t.hands) + ' · администратор ' + fmt(t.admin) + ' · отработки ' + fmt(t.otr), '−' + fmt(salaries), 'var(--red)');
-    const left1 = came - salaries;
-    html += row('Остаётся после ЗП', left1 >= 0 ? 'на зарплаты хватает' : 'на зарплаты не хватает', fmt(left1), left1 >= 0 ? 'var(--green)' : 'var(--red)');
+    const base = expected != null ? expected : came;
+    const left1 = base - salaries;
+    html += row('Остаётся после ЗП', (expected != null ? 'если оплатят всё ожидаемое · по уже пришедшему: ' + fmt(came - salaries) : (left1 >= 0 ? 'на зарплаты хватает' : 'на зарплаты не хватает')), fmt(left1), left1 >= 0 ? 'var(--green)' : 'var(--red)');
     html += row('Прочие выплаты месяца', 'аренда, уборка, SMM, налоги, расходы, кредиты (депозит остаётся в школе)', '−' + fmt(other), 'var(--red)');
     const left2 = left1 - other;
-    html += row('Остаётся после всех выплат', m === 5 ? 'ЗП за май — из оплат за сентябрь (до 10.06 по договору)' : '', fmt(left2), left2 >= 0 ? 'var(--green)' : 'var(--red)');
+    html += row('Остаётся после всех выплат', (m === 5 ? 'ЗП за май — из оплат за сентябрь (до 10.06 по договору) · ' : '') + (expected != null ? 'если оплатят всё ожидаемое · по уже пришедшему: ' + fmt(came - salaries - other) : ''), fmt(left2), left2 >= 0 ? 'var(--green)' : 'var(--red)');
   }
   document.getElementById('cashBody').innerHTML = html;
   const at = pb.at ? new Date(pb.at).toLocaleString('ru-RU', { day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' }) : '';
