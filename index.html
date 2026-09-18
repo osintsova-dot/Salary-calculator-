@@ -3394,12 +3394,13 @@ function applyBigBen(rawList) {
   const monTag = haveMonths.indexOf(wanted) >= 0 ? wanted : (haveMonths[haveMonths.length - 1] || '');
   const revNow = monTag ? (revByMonth[monTag] || {}) : {};
   const monthMismatch = wanted && monTag && wanted !== monTag;
+  let oldBookmark = false;
   if (useCrmRevenue()) {
     Object.keys(revByMonth).forEach(ym => {
       const acc = revByMonth[ym];
       if (!acc) return;
       const m = {};
-      let oldFmt = false;
+      let oldFmt = false;   // данные без поля «абонемент» — со старой версии закладки
       Object.keys(acc).forEach(name => {
         const i = bbMatch(name), cell = acc[name];
         if (i < 0 || !cell) return;                     // отработки/консультации в калькуляторе нет — не берём
@@ -3415,9 +3416,10 @@ function applyBigBen(rawList) {
         }
         if (rub !== null) m[i] = (m[i] || 0) + rub;
       });
-      state.crmRevM[ym] = m;
       state.crmOldM = state.crmOldM || {};
-      if (oldFmt) state.crmOldM[ym] = true; else delete state.crmOldM[ym];
+      if (oldFmt) { state.crmOldM[ym] = true; oldBookmark = true; return; }   // старая закладка: считает по урокам — не берём
+      delete state.crmOldM[ym];
+      state.crmRevM[ym] = m;
     });
   }
   list.forEach(item => {
@@ -3437,6 +3439,12 @@ function applyBigBen(rawList) {
       money.push(GROUPS[i].name + ': ' + fmt(rub) + (full !== rub ? ' (без скидок ' + fmt(full) + ')' : '') + note);
     }
   });
+  if (oldBookmark) {
+    const n = document.createElement('div');
+    n.style.cssText = 'position:fixed;left:50%;top:14px;transform:translateX(-50%);z-index:9999;background:#E8740A;color:#fff;padding:12px 18px;border-radius:12px;font:700 13px var(--font);box-shadow:0 6px 20px rgba(0,0,0,.25);max-width:92vw;text-align:center';
+    n.innerHTML = '⚠️ Это СТАРАЯ закладка — она считает по урокам.<br>Выручку не тронула. Обнови страницу (⌘⇧R) и перетащи закладку заново из «⬇️ Из BigBen».';
+    document.body.appendChild(n); setTimeout(() => n.remove(), 15000);
+  }
   if (Object.keys(crmPupils).length) state.crmPupils = crmPupils;   // актуальный состав из CRM — для всех месяцев учебного года
   GROUPS.forEach((g, i) => { if (!touched.has(i)) missed.push(g.name); });
   render();
