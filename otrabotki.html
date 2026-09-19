@@ -44,7 +44,23 @@ header .sub{font-size:12px;opacity:.9;margin-top:3px}
 .pay{display:flex;align-items:center;gap:10px;border:1px solid var(--line);border-radius:12px;padding:11px 13px;margin-bottom:8px}
 .pay .d{font-family:var(--mono);font-size:13px;font-weight:700;color:var(--p);flex:none;width:52px}
 .pay .pl{flex:1;font-size:14px;font-weight:600}
-.pay .noresp{color:#E8740A;font-weight:700}
+.pay .rephd{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px 14px;border-bottom:1px solid var(--line);flex-wrap:wrap}
+.repsub{font-size:11.5px;color:var(--mut);margin-top:2px}
+.repsum{padding:8px 14px;font-size:12.5px;color:var(--mut)}
+.prt{font-family:inherit;font-size:13px;font-weight:600;padding:7px 14px;border-radius:18px;border:1.5px solid var(--purple);background:#fff;color:var(--purple);cursor:pointer}
+table.rep{width:100%;border-collapse:collapse;font-size:12.5px}
+table.rep th{text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.03em;color:var(--mut);padding:6px 8px;border-bottom:1.5px solid var(--line)}
+table.rep td{padding:7px 8px;border-bottom:1px solid var(--line);vertical-align:top}
+table.rep tr.nd td:last-child{color:#c0392b;font-weight:600}
+table.rep tr.d td:last-child{color:#0a7a68;font-weight:600}
+@media print{
+  header,.tabs,.prt,#paneL,#paneP{display:none!important}
+  body{background:#fff}
+  .wrap{padding:0}
+  table.rep{font-size:11px}
+  .rephd{border:none;padding:0 0 8px}
+}
+.noresp{color:#E8740A;font-weight:700}
 .plwho{font-size:11.5px;color:#4a4a58;margin-top:2px;line-height:1.35}
 .plsub{font-size:11px;color:var(--mut)}
 .pay .amt{font-family:var(--mono);font-weight:800;font-size:15px;flex:none}
@@ -90,10 +106,12 @@ header .sub{font-size:12px;opacity:.9;margin-top:3px}
   <div class="tabs">
     <button id="tabL" class="on" onclick="showTab('L')">📋 Списки (обзвон)</button>
     <button id="tabP" onclick="showTab('P')">💰 Оплата</button>
+    <button id="tabR" onclick="showTab('R')">📄 Сводка недели</button>
   </div>
   <div class="wrap">
     <div id="paneL" class="pane"></div>
     <div id="paneP" class="pane" hidden></div>
+    <div id="paneR" class="pane" hidden></div>
     <div class="foot">Speak&amp;Smile · отработки · педагог Инга. «Был» отмечается в BigBen, тут — обзвон и оплата.</div>
   </div>
 </div>
@@ -150,8 +168,54 @@ function load(){
 function showTab(t){
   document.getElementById("tabL").className=t==="L"?"on":"";
   document.getElementById("tabP").className=t==="P"?"on":"";
+  document.getElementById("tabR").className=t==="R"?"on":"";
   document.getElementById("paneL").hidden=t!=="L";
   document.getElementById("paneP").hidden=t!=="P";
+  document.getElementById("paneR").hidden=t!=="R";
+  if(t==="R")renderReport();
+}
+
+// СВОДКА НЕДЕЛИ: по группам — кто пропустил, когда, по какой причине и отработал ли. Для печати.
+function renderReport(){
+  var pane=document.getElementById("paneR");pane.textContent="";
+  var rep=(DATA&&DATA.report)||[];
+  var head=el("div",{class:"rephd"},[
+    el("div",{},[el("b",{text:"Отработки за неделю"}),el("div",{class:"repsub",text:weekTitle()})]),
+    el("button",{class:"prt",text:"🖨 Печать",onClick:function(){window.print();}})
+  ]);
+  pane.appendChild(head);
+  if(!rep.length){pane.appendChild(el("div",{class:"empty",text:"За эту неделю пропусков нет"}));return;}
+  var tot=0,done=0;
+  rep.forEach(function(g){g.students.forEach(function(s){tot++;if(s.done)done++;});});
+  pane.appendChild(el("div",{class:"repsum",text:"Пропустили: "+tot+" · отработали: "+done+" · осталось: "+(tot-done)}));
+  var tbl=el("table",{class:"rep"});
+  var thead=el("thead",{},[el("tr",{},[
+    el("th",{text:"Группа"}),el("th",{text:"Ученик"}),el("th",{text:"Пропуски"}),el("th",{text:"Причина"}),el("th",{text:"Отработал"})
+  ])]);
+  tbl.appendChild(thead);
+  var tb=el("tbody");
+  rep.forEach(function(g){
+    g.students.forEach(function(s,i){
+      var dates=(s.dates||[]).map(fmtDate).join(", ");
+      var whys=(s.dates||[]).map(function(d){return (s.why&&s.why[d]==="n")?"неоплач.":"уваж.";});
+      var uniq=whys.filter(function(v,ix,a){return a.indexOf(v)===ix;}).join(" / ");
+      tb.appendChild(el("tr",{class:s.done?"d":"nd"},[
+        el("td",{text:i===0?g.group:""}),
+        el("td",{text:s.fio}),
+        el("td",{text:dates}),
+        el("td",{text:uniq}),
+        el("td",{text:s.done?("да, "+fmtDate(s.doneDate)):"нет"})
+      ]));
+    });
+  });
+  tbl.appendChild(tb);
+  pane.appendChild(tbl);
+}
+function weekTitle(){
+  if(!DATA||!DATA.week)return "";
+  var a=new Date(DATA.week+"T00:00:00"),b=new Date(a.getTime()+6*864e5);
+  var f=function(d){return ("0"+d.getDate()).slice(-2)+"."+("0"+(d.getMonth()+1)).slice(-2);};
+  return "неделя "+f(a)+" — "+f(b)+" · данные "+(DATA.at?fmtDT(DATA.at):"");
 }
 
 function mark(uid,m){
