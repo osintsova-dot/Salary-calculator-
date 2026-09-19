@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Новенькие · Speak&Smile</title>
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<style>
+:root{--purple:#6C3FC5;--green:#0EA5A0;--org:#E8740A;--red:#c0392b;--mut:#8a8a99;--line:#ececf3;--bg:#f6f6fa;
+  --font:-apple-system,BlinkMacSystemFont,'SF Pro Text','Helvetica Neue',Arial,sans-serif;--mono:'SF Mono',ui-monospace,Menlo,monospace}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);font-family:var(--font);color:#1b1b23}
+header{background:var(--purple);color:#fff;padding:16px 16px 14px}
+h1{margin:0;font-size:19px}
+.sub{font-size:12px;opacity:.85;margin-top:2px}
+.wrap{padding:14px 12px 40px;max-width:900px;margin:0 auto}
+.card{background:#fff;border-radius:14px;box-shadow:0 1px 3px rgba(0,0,0,.06);margin-bottom:12px;overflow:hidden}
+.card h2{margin:0;padding:12px 14px;font-size:14px;border-bottom:1px solid var(--line);background:#fafaff}
+.row{display:flex;gap:10px;align-items:center;justify-content:space-between;padding:9px 14px;border-bottom:1px solid var(--line);flex-wrap:wrap}
+.row:last-child{border-bottom:none}
+.name{font-size:14px;font-weight:600}
+.meta{font-size:11.5px;color:var(--mut)}
+.pill{font-size:11px;font-weight:700;padding:3px 9px;border-radius:12px;white-space:nowrap}
+.ok{background:#e7f7f2;color:#0a7a68}
+.warn{background:#fdf0e3;color:#a85a06}
+.bad{background:#fdecec;color:#a52020}
+button{font-family:var(--font);font-size:13px;font-weight:600;padding:8px 14px;border-radius:20px;border:1.5px solid var(--purple);background:#fff;color:var(--purple);cursor:pointer}
+button.primary{background:var(--purple);color:#fff}
+input[type=month],input[type=date]{font-family:var(--font);font-size:13px;padding:7px 10px;border:1.5px solid var(--line);border-radius:10px}
+.tools{display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:12px 14px}
+.stat{display:flex;gap:16px;flex-wrap:wrap;padding:10px 14px;font-size:13px}
+.stat b{font-family:var(--mono);font-size:16px}
+.gate{max-width:320px;margin:60px auto;text-align:center;display:grid;gap:10px}
+.gate input{padding:10px;border:1.5px solid var(--line);border-radius:10px;font-size:15px;text-align:center}
+.foot{font-size:11px;color:var(--mut);text-align:center;padding:14px}
+</style>
+</head>
+<body>
+
+<div id="gate" class="gate" hidden>
+  <div style="font-size:13px;color:var(--mut)">Введите код доступа</div>
+  <input id="code" inputmode="text" autocapitalize="none" autocomplete="off" placeholder="код">
+  <div><button class="primary" onclick="saveCode()">Войти</button></div>
+</div>
+
+<div id="app" hidden>
+<header>
+  <h1>🆕 Новенькие</h1>
+  <div class="sub" id="stamp">…</div>
+</header>
+<div class="wrap">
+
+  <div class="card">
+    <div class="tools">
+      <span style="font-size:13px">Заведены в CRM с</span>
+      <input type="date" id="from" value="2026-05-01" onchange="render()">
+      <button onclick="pick()">📁 Загрузить выгрузку учеников</button>
+      <button onclick="load()">Обновить</button>
+      <input type="file" id="file" accept=".csv" style="display:none" onchange="loadCsv(this.files[0])">
+    </div>
+    <div class="stat" id="stat"></div>
+  </div>
+
+  <div id="body"></div>
+  <div class="foot">Дата регистрации — из выгрузки «Ученики» в CRM. Группы и оплаты — из закладки «💳 BigBen → оплаты».<br>
+    Speak&amp;Smile · расчёт ЗП</div>
+</div>
+</div>
+
+<script>
+"use strict";
+var WORKER="https://ss-bb.o-sintsova.workers.dev";
+var PAY=null, STUD=null;
+function token(){return localStorage.getItem("bbToken")||"";}
+function esc(x){return String(x==null?"":x).replace(/[&<>]/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;"}[c];});}
+function fmtD(iso){if(!iso)return"";var p=iso.split("-");return p[2]+"."+p[1]+"."+p[0].slice(2);}
+function monthName(ym){var M=["январь","февраль","март","апрель","май","июнь","июль","август","сентябрь","октябрь","ноябрь","декабрь"];return M[+ym.slice(5,7)-1]+" "+ym.slice(0,4);}
+function saveCode(){var v=document.getElementById("code").value.trim();if(v){localStorage.setItem("bbToken",v);boot();}}
+function boot(){
+  if(!token()){document.getElementById("gate").hidden=false;document.getElementById("app").hidden=true;return;}
+  document.getElementById("gate").hidden=true;document.getElementById("app").hidden=false;load();
+}
+
+function load(){
+  document.getElementById("body").innerHTML='<div class="card"><div class="row">Загрузка…</div></div>';
+  Promise.all([
+    fetch(WORKER+"/pay-data?t="+encodeURIComponent(token()),{cache:"no-store"}).then(function(r){return r.json();}).catch(function(){return null;}),
+    fetch(WORKER+"/students-data?t="+encodeURIComponent(token()),{cache:"no-store"}).then(function(r){return r.json();}).catch(function(){return null;})
+  ]).then(function(res){
+    PAY=(res[0]&&res[0].data)||null;
+    STUD=(res[1]&&res[1].data)||null;
+    if(!STUD){try{STUD=JSON.parse(localStorage.getItem("ss_students")||"null");}catch(e){}}
+    render();
+  });
+}
+
+// Выгрузка «Ученики» из CRM (windows-1251). Берём ФИО и «Зарегистрирован» — это дата,
+// когда ребёнка впервые завели в базу. Отправляем на сервер, чтобы список был и на телефоне.
+function pick(){document.getElementById("file").click();}
+function loadCsv(f){
+  if(!f)return;
+  f.arrayBuffer().then(function(buf){
+    var txt;try{txt=new TextDecoder("windows-1251").decode(buf);}catch(e){txt=new TextDecoder().decode(buf);}
+    var rows=txt.split("\n"), H=rows[0].split(";").map(function(x){return x.replace(/"/g,"").trim();});
+    var iF=H.indexOf("ФИО"), iR=H.indexOf("Зарегистрирован"), iG=H.indexOf("Последняя группа"), iA=H.indexOf("Архивирован");
+    if(iF<0||iR<0){alert("Это не выгрузка учеников: нет колонок ФИО и «Зарегистрирован»");return;}
+    var list=[];
+    rows.slice(1).forEach(function(l){
+      var c=l.split(";").map(function(x){return x.replace(/"/g,"").trim();});
+      if(c.length<5)return;
+      var d=(c[iR]||"").match(/(\d{2})\.(\d{2})\.(\d{4})/);
+      if(!d)return;
+      list.push([c[iF], d[3]+"-"+d[2]+"-"+d[1], iG>=0?c[iG]:"", iA>=0?c[iA]:""]);
+    });
+    var data={at:new Date().toISOString(), list:list};
+    STUD=data;
+    try{localStorage.setItem("ss_students",JSON.stringify(data));}catch(e){}
+    render();
+    fetch(WORKER+"/students-data?t="+encodeURIComponent(token()),{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify(data)})
+      .then(function(r){return r.json();})
+      .then(function(d){document.getElementById("stamp").textContent += d&&d.ok?" · отправлено на сервер":" · на сервер не ушло";})
+      .catch(function(){});
+  });
+}
+
+function render(){
+  var body=document.getElementById("body"), stat=document.getElementById("stat");
+  var stamp=[];
+  if(STUD&&STUD.at) stamp.push("ученики на "+new Date(STUD.at).toLocaleString("ru-RU",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"}));
+  if(PAY&&PAY.at) stamp.push("группы и оплаты на "+new Date(PAY.at).toLocaleString("ru-RU",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"}));
+  document.getElementById("stamp").textContent=stamp.join(" · ")||"данных ещё нет";
+
+  if(!STUD||!STUD.list||!STUD.list.length){
+    body.innerHTML='<div class="card"><div class="row"><div><div class="name">Нужна выгрузка учеников</div>'+
+      '<div class="meta">В CRM: Ученики → Экспорт (CSV). Потом нажми «📁 Загрузить выгрузку учеников».</div></div></div></div>';
+    stat.innerHTML="";
+    return;
+  }
+  var from=document.getElementById("from").value||"2026-05-01";
+  // состав групп: имя → группы (из закладки «BigBen → оплаты»)
+  var byName={};
+  ((PAY&&PAY.roster)||[]).forEach(function(r){
+    var g=r[0],nm=r[2],add=r[3];
+    if(/консультац/i.test(g))return;
+    (byName[nm]=byName[nm]||[]).push({g:g,add:add});
+  });
+  // оплаты: группа+uid → есть ли оплаченный счёт
+  var uidPaid={};
+  ((PAY&&PAY.inv)||[]).forEach(function(i){ if(i[5]==="p") uidPaid[i[1]]=true; });
+  var uidByName={};
+  ((PAY&&PAY.roster)||[]).forEach(function(r){ uidByName[r[2]]=r[1]; });
+
+  var list=STUD.list.filter(function(x){return x[1]>=from && !/да/i.test(x[3]||"");})
+                    .sort(function(a,b){return b[1].localeCompare(a[1]);});
+  var inG=[], out=[];
+  list.forEach(function(x){
+    var g=byName[x[0]];
+    (g&&g.length?inG:out).push(x);
+  });
+  var byMonth={};
+  list.forEach(function(x){var k=x[1].slice(0,7);byMonth[k]=(byMonth[k]||0)+1;});
+
+  stat.innerHTML='<div>Новеньких: <b>'+list.length+'</b></div>'+
+    '<div>В группах: <b style="color:var(--green)">'+inG.length+'</b></div>'+
+    '<div>Без группы: <b style="color:var(--org)">'+out.length+'</b></div>'+
+    '<div class="meta" style="align-self:center">'+Object.keys(byMonth).sort().reverse().map(function(k){return monthName(k)+" — "+byMonth[k];}).join(" · ")+'</div>';
+
+  var html="";
+  // по месяцам регистрации
+  var months=Object.keys(byMonth).sort().reverse();
+  months.forEach(function(m){
+    var part=list.filter(function(x){return x[1].slice(0,7)===m;});
+    html+='<div class="card"><h2>'+monthName(m)+' — '+part.length+'</h2>';
+    part.forEach(function(x){
+      var gs=byName[x[0]]||[];
+      var uid=uidByName[x[0]];
+      var paid=uid&&uidPaid[uid];
+      var tag=!gs.length?'<span class="pill warn">нет в группах</span>'
+              :(paid?'<span class="pill ok">оплата есть</span>':'<span class="pill bad">оплат нет</span>');
+      html+='<div class="row"><div><div class="name">'+esc(x[0])+'</div>'+
+        '<div class="meta">заведён '+fmtD(x[1])+(gs.length?(' · '+esc(gs.map(function(g){return g.g+(g.add?" с "+fmtD(g.add):"");}).join(", "))):(x[2]?' · в карточке: '+esc(x[2]):''))+'</div></div>'+
+        tag+'</div>';
+    });
+    html+='</div>';
+  });
+  body.innerHTML=html;
+}
+
+boot();
+</script>
+</body>
+</html>

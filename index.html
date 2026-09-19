@@ -867,6 +867,13 @@
       background:none;white-space:nowrap;transition:all 0.15s;">
       📁 Оплаты из CRM
     </button>
+    <a href="newcomers.html" style="
+      font-family:var(--font);font-size:12px;font-weight:600;text-decoration:none;
+      padding:7px 14px;border-radius:20px;cursor:pointer;
+      border:1.5px solid var(--purple);color:var(--purple);background:none;
+      white-space:nowrap;align-self:center;">
+      🆕 Новенькие
+    </a>
     <a href="otrabotki.html" style="
       font-family:var(--font);font-size:12px;font-weight:600;text-decoration:none;
       padding:7px 14px;border-radius:20px;cursor:pointer;
@@ -3577,14 +3584,25 @@ async function __payScan(target) {
       const gl = await P('/admin/index.php?obj=groups&filter=' + f);
       gl.querySelectorAll('a').forEach((a) => { const m = (a.getAttribute('href') || '').match(/action=edit&group_id=(\d+)/); const t = a.textContent.replace(/\s+/g, ' ').trim(); if (m && t) groups[m[1]] = t; });
     }
-    const gids = Object.keys(groups), pairs = [];
+    const gids = Object.keys(groups), pairs = [], roster = [];
     for (let i = 0; i < gids.length; i++) {
       say('группы ' + (i + 1) + '/' + gids.length);
       const g = await P('/admin/index.php?obj=groups&action=edit&group_id=' + gids[i]);
       const cap = ((g.querySelector('[name="groups[caption]"]') || {}).value || groups[gids[i]]).trim();
       if (/консультац/i.test(cap)) continue;
-      new Set([...g.querySelectorAll('a')].map((a) => ((a.getAttribute('href') || '').match(/edituser&user_id=(\d+)/) || [])[1]).filter(Boolean))
-        .forEach((u) => pairs.push([gids[i], cap, u]));
+      const tb = [...g.querySelectorAll('table')].find((t) => /Оплачено до/.test(t.textContent));
+      const seen = new Set();
+      [...(tb ? tb.querySelectorAll('tbody tr') : [])].forEach((tr) => {
+        const c = [...tr.children];
+        const a = [...tr.querySelectorAll('a')].find((x) => /edituser&user_id=\d+/.test(x.getAttribute('href') || ''));
+        if (!a || c.length < 6) return;
+        const uid = a.getAttribute('href').match(/user_id=(\d+)/)[1];
+        if (seen.has(uid)) return; seen.add(uid);
+        const nm = a.textContent.replace(/\s+/g, ' ').replace(/\s*[А-ЯЁ][а-яё]+ \d+ балл.*$/, '').trim();
+        const ad = (c[5].textContent.match(/(\d{2})-(\d{2})-(\d{2})/) || []);
+        roster.push([cap, uid, nm, ad.length ? ('20' + ad[3] + '-' + ad[2] + '-' + ad[1]) : '']);
+        pairs.push([gids[i], cap, uid]);
+      });
     }
     const inv = [], ref = []; let k = 0;
     const w = async () => {
@@ -3610,7 +3628,7 @@ async function __payScan(target) {
     };
     await Promise.all([w(), w(), w(), w()]);
     say('готово: ' + inv.length + ' счетов — открываю калькулятор');
-    window.open(target + '#pay=' + btoa(unescape(encodeURIComponent(JSON.stringify({ at: new Date().toISOString(), pairs: pairs.length, inv, ref })))), '_blank');
+    window.open(target + '#pay=' + btoa(unescape(encodeURIComponent(JSON.stringify({ at: new Date().toISOString(), pairs: pairs.length, inv, ref, roster })))), '_blank');
   } catch (e) { alert('Ошибка: ' + e.message); }
 }
 (function buildPayBookmarklet() {
