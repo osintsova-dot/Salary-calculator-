@@ -44,7 +44,8 @@ header .sub{font-size:12px;opacity:.9;margin-top:3px}
 .pay{display:flex;align-items:center;gap:10px;border:1px solid var(--line);border-radius:12px;padding:11px 13px;margin-bottom:8px}
 .pay .d{font-family:var(--mono);font-size:13px;font-weight:700;color:var(--p);flex:none;width:52px}
 .pay .pl{flex:1;font-size:14px;font-weight:600}
-.pay .plwho{font-size:11.5px;color:#4a4a58;margin-top:2px;line-height:1.35}
+.pay .noresp{color:#E8740A;font-weight:700}
+.plwho{font-size:11.5px;color:#4a4a58;margin-top:2px;line-height:1.35}
 .plsub{font-size:11px;color:var(--mut)}
 .pay .amt{font-family:var(--mono);font-weight:800;font-size:15px;flex:none}
 .pay.ok .amt{color:var(--green)}.pay.no .amt{color:var(--mut)}
@@ -179,14 +180,17 @@ function renderLists(){
       var bNo=el("button",{class:"mbtn no"+(cm==="no"?" on":""),text:"не придёт",onClick:function(){mark(s.user_id,"no");}});
       var ds=(s.dates&&s.dates.length)?s.dates:(s.date?[s.date]:[]);
       var n=ds.length;
-      // причина пропуска из CRM: «Пропуск» = уважительная, «Неоплачиваемый пропуск» = нет
+      // причина из CRM: «Пропуск» (код 1) = уважительная, «Неоплачиваемый пропуск» (код 2) = нет — оранжевым
       var why=s.why||{};
-      var datesStr=ds.map(function(d){return fmtDate(d)+(why[d]==="n"?" (неуваж.)":why[d]==="y"?" (уваж.)":"");}).join(", ");
-      var missTxt=n>1?(n+" урока: "+datesStr):("пропустил "+datesStr);
+      var meta=el("div",{class:"meta"},[document.createTextNode(s.group+" · "+(n>1?(n+" урока: "):"пропустил "))]);
+      ds.forEach(function(d,idx){
+        if(idx)meta.appendChild(document.createTextNode(", "));
+        meta.appendChild(el("span",{class:(why[d]==="n"?"noresp":""),text:fmtDate(d)+(why[d]==="n"?" (неоплач.)":"")}));
+      });
       var nm=el("div",{class:"nm"},[el("span",{class:"nmtext",text:s.fio})]);
       if(n>1)nm.appendChild(el("span",{class:"cnt",text:"×"+n}));
       body.appendChild(el("div",{class:"stu"},[
-        el("div",{class:"mid"},[nm,el("div",{class:"meta",text:s.group+" · "+missTxt})]),
+        el("div",{class:"mid"},[nm,meta]),
         el("div",{class:"btns"},[bCome,bNo])
       ]));
     });
