@@ -44,7 +44,16 @@ header .sub{font-size:12px;opacity:.9;margin-top:3px}
 .pay{display:flex;align-items:center;gap:10px;border:1px solid var(--line);border-radius:12px;padding:11px 13px;margin-bottom:8px}
 .pay .d{font-family:var(--mono);font-size:13px;font-weight:700;color:var(--p);flex:none;width:52px}
 .pay .pl{flex:1;font-size:14px;font-weight:600}
-.pay .wsel{font-family:inherit;font-size:13px;padding:7px 10px;border-radius:12px;border:1.5px solid var(--line);background:#fff}
+.pay .gdet{border-bottom:1px solid var(--line)}
+.gdet summary{display:flex;gap:10px;align-items:baseline;justify-content:space-between;padding:11px 14px;cursor:pointer;flex-wrap:wrap}
+.gname{font-size:14px;font-weight:700}
+.gsub{font-size:11.5px;color:var(--mut)}
+.mstu{display:flex;gap:10px;align-items:baseline;justify-content:space-between;padding:7px 14px 7px 24px;border-top:1px dashed var(--line);flex-wrap:wrap}
+.mnm{font-size:13px;font-weight:600;min-width:150px}
+.mdays{font-size:12px;color:#4a4a58;text-align:right}
+.day{white-space:nowrap}
+.day.ok{color:#0a7a68;font-weight:700}
+.wsel{font-family:inherit;font-size:13px;padding:7px 10px;border-radius:12px;border:1.5px solid var(--line);background:#fff}
 .rephd{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px 14px;border-bottom:1px solid var(--line);flex-wrap:wrap}
 .repsub{font-size:11.5px;color:var(--mut);margin-top:2px}
 .repsum{padding:8px 14px;font-size:12.5px;color:var(--mut)}
@@ -108,11 +117,13 @@ table.rep tr.d td:last-child{color:#0a7a68;font-weight:600}
     <button id="tabL" class="on" onclick="showTab('L')">📋 Списки (обзвон)</button>
     <button id="tabP" onclick="showTab('P')">💰 Оплата</button>
     <button id="tabR" onclick="showTab('R')">📄 Сводка недели</button>
+    <button id="tabM" onclick="showTab('M')">🗓 Месяц</button>
   </div>
   <div class="wrap">
     <div id="paneL" class="pane"></div>
     <div id="paneP" class="pane" hidden></div>
     <div id="paneR" class="pane" hidden></div>
+    <div id="paneM" class="pane" hidden></div>
     <div class="foot">Speak&amp;Smile · отработки · педагог Инга. «Был» отмечается в BigBen, тут — обзвон и оплата.</div>
   </div>
 </div>
@@ -170,10 +181,13 @@ function showTab(t){
   document.getElementById("tabL").className=t==="L"?"on":"";
   document.getElementById("tabP").className=t==="P"?"on":"";
   document.getElementById("tabR").className=t==="R"?"on":"";
+  document.getElementById("tabM").className=t==="M"?"on":"";
   document.getElementById("paneL").hidden=t!=="L";
   document.getElementById("paneP").hidden=t!=="P";
   document.getElementById("paneR").hidden=t!=="R";
+  document.getElementById("paneM").hidden=t!=="M";
   if(t==="R")renderReport();
+  if(t==="M")renderMonth();
 }
 
 // СВОДКА НЕДЕЛИ: по группам — кто пропустил, когда, по какой причине и отработал ли. Для печати.
@@ -233,6 +247,54 @@ function renderReport(){
   tbl.appendChild(tb);
   pane.appendChild(tbl);
 }
+// КАРТИНА МЕСЯЦА: группы сворачиваются, внутри — дети, их пропуски (с причиной) и что отработано.
+var MON=null, MONKEY=null;
+function renderMonth(){
+  var pane=document.getElementById("paneM");pane.textContent="";
+  if(!MON){
+    pane.appendChild(el("div",{class:"empty",text:"Загрузка…"}));
+    fetch(WORKER+"/otr-months?t="+encodeURIComponent(token()),{cache:"no-store"})
+      .then(function(r){return r.json();}).then(function(d){MON=(d&&d.all)||{};renderMonth();})
+      .catch(function(){MON={};renderMonth();});
+    return;
+  }
+  var ms=Object.keys(MON).sort().reverse();
+  if(!ms.length){pane.appendChild(el("div",{class:"empty",text:"Данных пока нет"}));return;}
+  if(!MONKEY||ms.indexOf(MONKEY)<0)MONKEY=ms[0];
+  var cur=MON[MONKEY]||{groups:[]};
+  var sel=el("select",{class:"wsel",onChange:function(){MONKEY=this.value;renderMonth();}});
+  ms.forEach(function(m){var o=el("option",{value:m,text:monthName(m)});if(m===MONKEY)o.selected=true;sel.appendChild(o);});
+  pane.appendChild(el("div",{class:"rephd"},[
+    el("div",{},[el("b",{text:"Пропуски и отработки за месяц"}),el("div",{class:"repsub",text:"данные "+(cur.at?fmtDT(cur.at):"—")})]),
+    el("div",{style:"display:flex;gap:8px;align-items:center;flex-wrap:wrap"},[sel,el("button",{class:"prt",text:"🖨 Печать",onClick:function(){window.print();}})])
+  ]));
+  var tk=0,td=0,tm=0;
+  cur.groups.forEach(function(g){g.students.forEach(function(s){tk++;tm+=s.misses;td+=s.done;});});
+  pane.appendChild(el("div",{class:"repsum",text:"Детей с пропусками: "+tk+" · пропусков: "+tm+" · отработано: "+td+" ("+(tm?Math.round(td/tm*100):0)+"%)"}));
+  cur.groups.forEach(function(g){
+    var miss=0,done=0;g.students.forEach(function(s){miss+=s.misses;done+=s.done;});
+    var det=el("details",{class:"gdet"});
+    det.appendChild(el("summary",{},[
+      el("span",{class:"gname",text:g.group}),
+      el("span",{class:"gsub",text:g.students.length+" чел. · "+miss+" пропусков · отработано "+done})
+    ]));
+    g.students.forEach(function(s){
+      var line=el("div",{class:"mstu"},[
+        el("div",{class:"mnm",text:s.fio}),
+        el("div",{class:"mdays"})
+      ]);
+      var wrap=line.querySelector(".mdays");
+      s.days.forEach(function(d,i){
+        if(i)wrap.appendChild(document.createTextNode(" "));
+        wrap.appendChild(el("span",{class:"day"+(d.done?" ok":"")+(d.why==="n"?" noresp":""),
+          text:fmtDate(d.date)+(d.done?" ✓":"")+(d.why==="n"?" (неоплач.)":"")}));
+      });
+      det.appendChild(line);
+    });
+    pane.appendChild(det);
+  });
+}
+function monthName(m){var M=["январь","февраль","март","апрель","май","июнь","июль","август","сентябрь","октябрь","ноябрь","декабрь"];return M[+m.slice(5,7)-1]+" "+m.slice(0,4);}
 function weekLabel(w){
   var a=new Date(w+"T00:00:00"),b=new Date(a.getTime()+6*864e5);
   var f=function(d){return ("0"+d.getDate()).slice(-2)+"."+("0"+(d.getMonth()+1)).slice(-2);};
