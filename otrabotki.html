@@ -79,7 +79,10 @@ header .sub{font-size:12px;opacity:.9;margin-top:3px}
         <h1>🔁 Отработки</h1>
         <div class="sub" id="dataAt">…</div>
       </div>
-      <button class="refresh" onclick="load()">Обновить</button>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;justify-content:flex-end">
+        <button class="refresh" onclick="load()">Обновить</button>
+        <button class="refresh" id="btnCollect" onclick="collectNow()" title="Заново прочитать посещаемость в BigBen (3–5 минут)">🔄 Собрать из BigBen</button>
+      </div>
     </div>
   </header>
   <div class="tabs">
@@ -102,6 +105,29 @@ function token(){return localStorage.getItem("bbToken")||"";}
 function fmtDate(s){if(!s)return"";var p=s.split("-");return p[2]+"."+p[1];}
 function fmtDT(s){try{var d=new Date(s);return d.toLocaleString("ru-RU",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"});}catch(e){return"";}}
 
+// Пересбор из BigBen прямо со страницы: вход (до 1,5 мин) + сбор посещаемости (3–4 мин).
+// Нужен, потому что GitHub запускает расписание с задержкой, а данные бывают нужны сразу.
+function collectNow(){
+  var b=document.getElementById("btnCollect"), at=document.getElementById("dataAt");
+  if(b.disabled) return;
+  b.disabled=true; var was=b.textContent;
+  var tick=function(t){b.textContent=t;};
+  var go=function(what,ms){return fetch(WORKER+"/tick-7a3f9c2e51?do="+what+"&t="+encodeURIComponent(token()),{cache:"no-store"}).then(function(r){return r.json();});};
+  tick("Вход в BigBen…");
+  go("warm").then(function(w){
+    if(!w||!w.ok) throw new Error((w&&w.error)||"BigBen не пустил");
+    tick("Собираю посещаемость… 3–4 мин");
+    return go("otr");
+  }).then(function(o){
+    if(!o||!o.ok) throw new Error((o&&o.error)||"сбор не прошёл");
+    b.textContent="✅ Готово"; load();
+    if(o.failedGroups) at.textContent += " · BigBen отдал не все группы ("+o.failedGroups+") — очередь оставлена прошлая";
+    setTimeout(function(){b.textContent=was;b.disabled=false;},4000);
+  }).catch(function(e){
+    b.textContent="⚠️ "+(e.message||"не вышло");
+    setTimeout(function(){b.textContent=was;b.disabled=false;},6000);
+  });
+}
 function saveCode(){var v=document.getElementById("code").value.trim();if(v){localStorage.setItem("bbToken",v);boot();}}
 function boot(){
   if(!token()){document.getElementById("gate").hidden=false;document.getElementById("app").hidden=true;return;}
