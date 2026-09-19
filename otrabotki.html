@@ -44,7 +44,8 @@ header .sub{font-size:12px;opacity:.9;margin-top:3px}
 .pay{display:flex;align-items:center;gap:10px;border:1px solid var(--line);border-radius:12px;padding:11px 13px;margin-bottom:8px}
 .pay .d{font-family:var(--mono);font-size:13px;font-weight:700;color:var(--p);flex:none;width:52px}
 .pay .pl{flex:1;font-size:14px;font-weight:600}
-.pay .plsub{font-size:11px;color:var(--mut)}
+.pay .plwho{font-size:11.5px;color:#4a4a58;margin-top:2px;line-height:1.35}
+.plsub{font-size:11px;color:var(--mut)}
 .pay .amt{font-family:var(--mono);font-weight:800;font-size:15px;flex:none}
 .pay.ok .amt{color:var(--green)}.pay.no .amt{color:var(--mut)}
 .mhd{display:flex;align-items:baseline;justify-content:space-between;gap:10px;margin:16px 2px 8px;padding-bottom:6px;border-bottom:2px solid var(--p)}
@@ -223,7 +224,9 @@ function renderPay(){
       var ok=p.conducted,r=rateFor(p.lk);
       pane.appendChild(el("div",{class:"pay "+(ok?"ok":"no")},[
         el("div",{class:"d",text:fmtDate(p.date)}),
-        el("div",{class:"pl"},[document.createTextNode(p.label),el("div",{class:"plsub",text:ok?("пришло: "+p.attendees+" · "+(r===2250?"90":"60")+" мин"):"не состоялась / не отмечено"})]),
+        el("div",{class:"pl"},[document.createTextNode(p.label),
+          el("div",{class:"plsub",text:ok?("пришло: "+p.attendees+" · "+(r===2250?"90":"60")+" мин"):"не состоялась / не отмечено"}),
+          (ok&&p.who&&p.who.length)?el("div",{class:"plwho",text:p.who.join(", ")}):null]),
         el("div",{class:"amt",text:ok?rub(r):"—"})
       ]));
     });
