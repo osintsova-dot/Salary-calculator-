@@ -150,6 +150,7 @@ function render(){
   var uidByName={};
   ((PAY&&PAY.roster)||[]).forEach(function(r){ uidByName[r[2]]=r[1]; });
 
+  var noRoster=!((PAY&&PAY.roster)||[]).length;
   var list=STUD.list.filter(function(x){return x[1]>=from && !/да/i.test(x[3]||"");})
                     .sort(function(a,b){return b[1].localeCompare(a[1]);});
   var inG=[], out=[];
@@ -166,6 +167,8 @@ function render(){
     '<div class="meta" style="align-self:center">'+Object.keys(byMonth).sort().reverse().map(function(k){return monthName(k)+" — "+byMonth[k];}).join(" · ")+'</div>';
 
   var html="";
+  if(noRoster) html+='<div class="card"><div class="row"><div><div class="name" style="color:var(--org)">Нет составов групп</div>'+
+    '<div class="meta">Закладка «💳 BigBen → оплаты» у тебя старая — она присылает только счета. Обнови страницу калькулятора (⌘⇧R), перетащи закладку заново и нажми её на BigBen. Пока группы у новеньких показаны из их карточки в CRM.</div></div></div></div>';
   // по месяцам регистрации
   var months=Object.keys(byMonth).sort().reverse();
   months.forEach(function(m){
@@ -175,7 +178,7 @@ function render(){
       var gs=byName[x[0]]||[];
       var uid=uidByName[x[0]];
       var paid=uid&&uidPaid[uid];
-      var tag=!gs.length?'<span class="pill warn">нет в группах</span>'
+      var tag=noRoster?'<span class="pill warn">состав групп не загружен</span>':!gs.length?'<span class="pill warn">нет в группах</span>'
               :(paid?'<span class="pill ok">оплата есть</span>':'<span class="pill bad">оплат нет</span>');
       html+='<div class="row"><div><div class="name">'+esc(x[0])+'</div>'+
         '<div class="meta">заведён '+fmtD(x[1])+(gs.length?(' · '+esc(gs.map(function(g){return g.g+(g.add?" с "+fmtD(g.add):"");}).join(", "))):(x[2]?' · в карточке: '+esc(x[2]):''))+'</div></div>'+
