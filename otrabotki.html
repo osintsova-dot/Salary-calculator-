@@ -177,18 +177,39 @@ function showTab(t){
 }
 
 // СВОДКА НЕДЕЛИ: по группам — кто пропустил, когда, по какой причине и отработал ли. Для печати.
+// Недели хранятся в архиве на сервере (/otr-reports), можно посмотреть любую прошлую.
+var ARCH=null, ARCHWEEK=null;
 function renderReport(){
   var pane=document.getElementById("paneR");pane.textContent="";
-  var rep=(DATA&&DATA.report)||[];
+  if(!ARCH){
+    pane.appendChild(el("div",{class:"empty",text:"Загрузка архива…"}));
+    fetch(WORKER+"/otr-reports?t="+encodeURIComponent(token()),{cache:"no-store"})
+      .then(function(r){return r.json();})
+      .then(function(d){ARCH=(d&&d.all)||{};renderReport();})
+      .catch(function(){ARCH={};renderReport();});
+    return;
+  }
+  var weeks=Object.keys(ARCH).sort().reverse();
+  if(DATA&&DATA.week&&weeks.indexOf(DATA.week)<0)weeks.unshift(DATA.week);
+  if(!ARCHWEEK||weeks.indexOf(ARCHWEEK)<0)ARCHWEEK=(DATA&&DATA.week)||weeks[0];
+  var cur=(DATA&&ARCHWEEK===DATA.week)?{week:DATA.week,at:DATA.at,report:DATA.report||[]}:(ARCH[ARCHWEEK]||{report:[]});
+  var rep=cur.report||[];
+  var sel=el("select",{class:"wsel",onChange:function(){ARCHWEEK=this.value;renderReport();}});
+  weeks.forEach(function(w){
+    var o=el("option",{value:w,text:weekLabel(w)+((DATA&&w===DATA.week)?" (текущая)":"")});
+    if(w===ARCHWEEK)o.selected=true;
+    sel.appendChild(o);
+  });
   var head=el("div",{class:"rephd"},[
-    el("div",{},[el("b",{text:"Отработки за неделю"}),el("div",{class:"repsub",text:weekTitle()})]),
-    el("button",{class:"prt",text:"🖨 Печать",onClick:function(){window.print();}})
+    el("div",{},[el("b",{text:"Отработки за неделю"}),el("div",{class:"repsub",text:"данные "+(cur.at?fmtDT(cur.at):"—")})]),
+    el("div",{style:"display:flex;gap:8px;align-items:center;flex-wrap:wrap"},[sel,
+      el("button",{class:"prt",text:"🖨 Печать",onClick:function(){window.print();}})])
   ]);
   pane.appendChild(head);
   if(!rep.length){pane.appendChild(el("div",{class:"empty",text:"За эту неделю пропусков нет"}));return;}
   var tot=0,done=0;
   rep.forEach(function(g){g.students.forEach(function(s){tot++;if(s.done)done++;});});
-  pane.appendChild(el("div",{class:"repsum",text:"Пропустили: "+tot+" · отработали: "+done+" · осталось: "+(tot-done)}));
+  pane.appendChild(el("div",{class:"repsum",text:"Неделя "+weekLabel(ARCHWEEK)+" · пропустили: "+tot+" · отработали: "+done+" · осталось: "+(tot-done)}));
   var tbl=el("table",{class:"rep"});
   var thead=el("thead",{},[el("tr",{},[
     el("th",{text:"Группа"}),el("th",{text:"Ученик"}),el("th",{text:"Пропуски"}),el("th",{text:"Причина"}),el("th",{text:"Отработал"})
@@ -212,11 +233,10 @@ function renderReport(){
   tbl.appendChild(tb);
   pane.appendChild(tbl);
 }
-function weekTitle(){
-  if(!DATA||!DATA.week)return "";
-  var a=new Date(DATA.week+"T00:00:00"),b=new Date(a.getTime()+6*864e5);
+function weekLabel(w){
+  var a=new Date(w+"T00:00:00"),b=new Date(a.getTime()+6*864e5);
   var f=function(d){return ("0"+d.getDate()).slice(-2)+"."+("0"+(d.getMonth()+1)).slice(-2);};
-  return "неделя "+f(a)+" — "+f(b)+" · данные "+(DATA.at?fmtDT(DATA.at):"");
+  return f(a)+" — "+f(b);
 }
 
 function mark(uid,m){
