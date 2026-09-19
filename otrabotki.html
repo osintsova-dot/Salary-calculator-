@@ -179,7 +179,9 @@ function renderLists(){
       var bNo=el("button",{class:"mbtn no"+(cm==="no"?" on":""),text:"не придёт",onClick:function(){mark(s.user_id,"no");}});
       var ds=(s.dates&&s.dates.length)?s.dates:(s.date?[s.date]:[]);
       var n=ds.length;
-      var datesStr=ds.map(fmtDate).join(", ");
+      // причина пропуска из CRM: «Пропуск» = уважительная, «Неоплачиваемый пропуск» = нет
+      var why=s.why||{};
+      var datesStr=ds.map(function(d){return fmtDate(d)+(why[d]==="n"?" (неуваж.)":why[d]==="y"?" (уваж.)":"");}).join(", ");
       var missTxt=n>1?(n+" урока: "+datesStr):("пропустил "+datesStr);
       var nm=el("div",{class:"nm"},[el("span",{class:"nmtext",text:s.fio})]);
       if(n>1)nm.appendChild(el("span",{class:"cnt",text:"×"+n}));
