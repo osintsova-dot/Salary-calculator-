@@ -976,7 +976,7 @@
     <div style="padding:14px var(--px);background:var(--gray-50);border-bottom:1.5px solid var(--gray-100);display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap">
       <div>
         <div style="font-size:13px;font-weight:700;color:var(--gray-900)">💰 Экономия на отработках</div>
-        <div style="font-size:11px;color:var(--gray-400);margin-top:1px">формат отработок vs перерасчёт занятий · перерасчёт 1 000 ₽/урок (60 мин), 1 250 ₽/урок (90 мин)</div>
+        <div style="font-size:11px;color:var(--gray-400);margin-top:1px">формат отработок vs перерасчёт занятий · перерасчёт 1 000 ₽/урок (60 мин), 1 250 ₽/урок (90 мин) · Инге 25 ₽/мин</div>
       </div>
       <div style="text-align:right">
         <div id="otrSaveTotal" style="font-family:var(--mono);font-size:20px;font-weight:800;color:var(--green)">—</div>
@@ -1064,7 +1064,7 @@
       <div class="fx-row" style="display:flex;align-items:center;padding:12px var(--px)">
         <div style="flex:1">
           <div class="admin-name" style="font-size:14px">Отработки онлайн</div>
-          <div class="admin-rule">1 500 ₽ за 60 мин · 2 250 ₽ за 90 мин · автоматически из вкладки «Отработки»</div>
+          <div class="admin-rule">25 ₽ за минуту урока (45 мин = 1 125 ₽, 60 = 1 500, 90 = 2 250) · автоматически из вкладки «Отработки»</div>
         </div>
         <div class="fx-vals" style="display:flex;align-items:center;gap:16px;flex-wrap:wrap;justify-content:flex-end">
           <div>
@@ -1723,7 +1723,7 @@ function otrCounts(ym) {
   let all = window.__otrByMonth;
   if (!all) { try { all = JSON.parse(localStorage.getItem('ss_otr_counts') || 'null'); } catch (e) {} }
   if (!all || ym < '2026-09') return null;
-  return all[ym] || { o60: 0, o90: 0 };
+  return all[ym] || { o60: 0, o90: 0, pay: 0 };
 }
 // Прочие расходы за месяц — из CRM (раздел «Расходы», вносит Наталья: хоз, типография, реклама).
 // Зарплаты, аренду и налоги она туда НЕ вносит — двойного счёта нет. null — нет данных/до сентября 2026.
@@ -2030,17 +2030,19 @@ async function fetchOtrSavings(){
     if(!d || !d.ok || !Array.isArray(d.payLessons)) return;
     const OTR90={GI1:1,GI2:1,P3:1,P4:1,P5:1,GW:1};
     const perLesson=function(lk){return OTR90[lk]?1250:1000;};
-    const rate=function(lk){return OTR90[lk]?2250:1500;};
+    // Инге платим 25 ₽ за минуту фактического урока (время из расписания CRM)
+    const rate=function(p){return (p.pay!=null)?p.pay:Math.round((p.mins||(OTR90[p.lk]?90:60))*25);};
     const MONTHS=['январь','февраль','март','апрель','май','июнь','июль','август','сентябрь','октябрь','ноябрь','декабрь'];
     const byM={}; let gRefund=0,gInga=0,gClosed=0,gSlots=0;
     const byMonthCnt={};                       // ym -> {o60, o90} — число проведённых отработок по длительности
     d.payLessons.forEach(function(p){
       if(!p.conducted) return;
       const ym=(p.date||'').slice(0,7);
-      const cc=byMonthCnt[ym]||(byMonthCnt[ym]={o60:0,o90:0});
+      const cc=byMonthCnt[ym]||(byMonthCnt[ym]={o60:0,o90:0,pay:0});
       if(OTR90[p.lk]) cc.o90++; else cc.o60++;
+      cc.pay+=rate(p);                         // оплата Инге — по фактическим минутам
       const closed=(p.closed!=null)?p.closed:0;
-      const refund=closed*perLesson(p.lk), inga=rate(p.lk);
+      const refund=closed*perLesson(p.lk), inga=rate(p);
       const m=byM[ym]||(byM[ym]={refund:0,inga:0,closed:0,slots:0});
       m.refund+=refund; m.inga+=inga; m.closed+=closed; m.slots++;
       gRefund+=refund; gInga+=inga; gClosed+=closed; gSlots++;
@@ -2132,7 +2134,10 @@ function render() {
   const adminPay = Math.max(adminPct, fixedState.adminMin);
   const otrAuto = otrCounts(picker.value);
   if (otrAuto) { fixedState.otrabotki60 = otrAuto.o60; fixedState.otrabotki90 = otrAuto.o90; }
-  const otrabotkiPay = (fixedState.otrabotki60 || 0) * 1500 + (fixedState.otrabotki90 || 0) * 2250;
+  // авто: сумма по фактической длительности (25 ₽/мин); вручную: старые ставки 1500/2250
+  const otrabotkiPay = (otrAuto && otrAuto.pay != null)
+    ? otrAuto.pay
+    : (fixedState.otrabotki60 || 0) * 1500 + (fixedState.otrabotki90 || 0) * 2250;
   const taxPay = monthlyAmount('taxes');
   const costCrm = crmSpent(picker.value);
   const costPay = costCrm !== null ? costCrm : monthlyAmount('costs');
