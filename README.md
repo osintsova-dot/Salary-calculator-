@@ -18,7 +18,7 @@
 
 ## Откуда данные
 
-**Воркер `ss-bb`** — `~/salary-worker/worker.js`, деплой `npx wrangler deploy`.
+**Воркер `ss-bb`** — `~/Проекты с Claude/salary-worker/worker.js`, деплой `npx wrangler deploy`.
 Ходит в CRM под логином школы, хранит снимки в KV и отдаёт их страницам.
 
 **Закладки в браузере** (то, что CRM не отдаёт воркеру — только живому браузеру):
@@ -29,7 +29,7 @@
 **перетащить заново**, иначе она соберёт данные по-старому.
 
 **Автосбор** — GitHub Actions в репозитории `speak-smile-hub`
-(`~/speak-smile-hub/deploy/.github/workflows/otrabotki.yml`), четыре раза в сутки:
+(`~/Проекты с Claude/speak-smile-hub/deploy/.github/workflows/otrabotki.yml`), четыре раза в сутки:
 вход в CRM → выручка → финансы → отработки → длительность отработок → картина месяца.
 
 ## Как считается
