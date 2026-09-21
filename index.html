@@ -924,6 +924,7 @@
       <div class="card-label">Администратор</div>
       <div class="card-value green" id="adminPay">0 ₽</div>
       <div class="card-sub" id="adminNote">5% от выручки</div>
+      <div class="card-sub" id="adminGap" style="color:var(--gray-400)"></div>
     </div>
     <div class="card">
       <div class="card-label">Все выплаты</div>
@@ -1000,7 +1001,7 @@
       <div class="fx-row" style="display:flex;align-items:center;padding:12px var(--px);border-bottom:1px solid var(--gray-100)">
         <div style="flex:1">
           <div class="admin-name" style="font-size:14px">Наталья · Администратор</div>
-          <div class="admin-rule">5% от выручки, минимум <span id="adminMinLabel">80 000 ₽</span>/мес
+          <div class="admin-rule">5% от выручки, минимум <span id="adminMinLabel">95 000 ₽</span>/мес
             &nbsp;<button data-action="editFixed" data-key="adminMin" style="font-size:10px;font-family:var(--font);border:1px solid var(--gray-200);background:none;border-radius:10px;padding:1px 7px;cursor:pointer;color:var(--gray-400)">✏️</button>
           </div>
         </div>
@@ -1439,7 +1440,7 @@ function noShowGroup(i, ym) {
   return NOSHOW.reduce((s, e) => (e.ym === mon && bbNorm(e.group) === key) ? s + e.sum : s, 0);
 }
 function noShowMonth(ym) { return NOSHOW.filter(e => e.ym === (ym || curYM())); }
-const FIXED_DEFAULTS = { cleaning: 33000, smm: 18000, rent: 200000, adminMin: 80000, otrabotki60: 0, otrabotki90: 0,
+const FIXED_DEFAULTS = { cleaning: 33000, smm: 18000, rent: 200000, adminMin: 95000, otrabotki60: 0, otrabotki90: 0,
   // Абонементы (для возврата их скидок в базу администратора). Каждый: месячная скидка
   // + с какого по какой месяц активен. Возврат сам тает, когда абонемент кончается.
   // ТОЛЬКО абонементы; семейные/индивидуальные скидки сюда НЕ входят.
@@ -1595,6 +1596,12 @@ function renderPremiumBlock() {
   });
 }
 let fixedState = Object.assign({}, FIXED_DEFAULTS, JSON.parse(localStorage.getItem('ss_fixed') || '{}'));
+// Договорённость с Натальей (сентябрь 2026): пол 80 000 → 95 000, процент прежний.
+// Переводим только нетронутое значение 80 000 — если сумма правилась руками, не лезем.
+if (!localStorage.getItem('ss_adminmin95')) {
+  if (fixedState.adminMin === 80000) { fixedState.adminMin = 95000; localStorage.setItem('ss_fixed', JSON.stringify(fixedState)); }
+  localStorage.setItem('ss_adminmin95', '1');
+}
 // у старых сохранённых абонементов нет группы — проставляем по фамилии (скидка вычитается в группе ребёнка)
 (function () {
   const G = { 'мурзагулов': 'GMF 1A', 'панкова': 'GMF 2B', 'батяновск': 'GMF 2B', 'ботяновск': 'GMF 2B', 'колесникова': 'GMF 2A',
@@ -2199,6 +2206,16 @@ function render() {
   document.getElementById('adminNote').textContent = '5% от ' + fmt(adminBase)
     + (adminBase !== totalRevenue ? ' (выручка + скидки абонементов' + (monthCrm(picker.value) && earlyMonth() ? ' и ранней оплаты' : '') + ' ' + fmt(adminBase - totalRevenue) + ')' : '')
     + ' = ' + fmt(adminPct) + (adminPct < fixedState.adminMin ? ' → минимум' : '');
+  // Порог: с какой выручки процент обгоняет пол. Считаем в детях по 8 000 — самый осторожный счёт.
+  const gapEl = document.getElementById('adminGap');
+  if (gapEl) {
+    if (adminPct < fixedState.adminMin) {
+      const needRub = Math.round(fixedState.adminMin / ADMIN_PCT - adminBase);
+      gapEl.textContent = 'до процента не хватает ' + fmt(needRub) + ' выручки ≈ ' + Math.ceil(needRub / 8000) + ' детей';
+    } else {
+      gapEl.textContent = 'процент выше минимума на ' + fmt(adminPct - fixedState.adminMin);
+    }
+  }
   const profit = totalRevenue - totalAllPay;
   // Зарплата Оксаны — тоже её деньги, поэтому в «остатке» она возвращается обратно
   const ownerName = 'Оксана Синцова';
