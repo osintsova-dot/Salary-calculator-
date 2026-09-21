@@ -900,6 +900,7 @@
       <div class="card-value green" id="paidReal">—</div>
       <div class="card-sub" id="paidSub">за этот учебный месяц</div>
       <div class="card-sub" id="paidSplit" style="color:var(--gray-400)"></div>
+      <div class="card-sub" id="paidWays" style="color:var(--gray-400)"></div>
     </div>
     <div class="card">
       <div class="card-label">⚠️ Долг <span style="font-size:9px;color:var(--gray-400)">факт из CRM</span></div>
@@ -1959,6 +1960,7 @@ function payByMonth() {
   if (!d || !Array.isArray(d.inv)) return null;
   const paid = {}, unpaid = {}, unpaidN = {}, refunds = {};
   const shortPaid = {}, longPaid = {}, shortN = {};   // помесячные счета и доли длинных абонементов
+  const ways = {};                                    // способ оплаты (из CRM) по месяцам
   d.inv.forEach(x => {
     const months = invMonths(x[2], x[3]); if (!months.length) return;
     const part = (+x[4] || 0) / months.length;
@@ -1968,11 +1970,13 @@ function payByMonth() {
         paid[k] = (paid[k] || 0) + part;
         if (isLong) longPaid[k] = (longPaid[k] || 0) + part;
         else { shortPaid[k] = (shortPaid[k] || 0) + part; shortN[k] = (shortN[k] || 0) + 1; }
+        const w = (x[7] || '').trim();
+        if (w) { (ways[k] = ways[k] || {})[w] = (ways[k][w] || 0) + part; }
       } else if (x[5] === 'u') { unpaid[k] = (unpaid[k] || 0) + part; unpaidN[k] = (unpaidN[k] || 0) + 1; }
     });
   });
   (d.ref || []).forEach(r => { const t = ruDate(r[3]); if (t) { const k = ymOf(t); refunds[k] = (refunds[k] || 0) + (+r[2] || 0); } });
-  return { at: d.at, paid, unpaid, unpaidN, refunds, shortPaid, longPaid, shortN };
+  return { at: d.at, paid, unpaid, unpaidN, refunds, shortPaid, longPaid, shortN, ways };
 }
 function paidNet(pb, ym) { return Math.round((pb.paid[ym] || 0) - (pb.refunds[ym] || 0)); }
 async function fetchPayData() {
@@ -2119,17 +2123,17 @@ function renderFinance() {
   const debtCount=localStorage.getItem('ss_debt_count');
   if(de){
     const dm = debtMap[ym];
-    // CRM разносит долг по месяцам только там, где месяц написан в комментарии,
-    // поэтому главная цифра — весь долг по школе, а месячная пометка уходит в подпись.
-    if(debtTotal!=null){
-      de.textContent = fmt(+debtTotal);
-      de.style.color = +debtTotal>0 ? 'var(--red,#c00)' : 'var(--green)';
-      if(ds) ds.textContent = 'всего по школе' + (debtCount?' · '+debtCount+' должников':'')
-        + (dm ? ' · за '+monthNameOf(ym)+' '+fmt(Math.round(dm)) : '');
-    } else if(dm!=null){
+    // Главная цифра — долг ЗА ВЫБРАННЫЙ МЕСЯЦ, общий по школе уходит в подпись:
+    // иначе в сентябре видна полуторамиллионная сумма, в которой почти весь долг — октябрьский.
+    if(dm!=null){
       de.textContent = fmt(Math.round(dm));
       de.style.color = dm>0 ? 'var(--red,#c00)' : 'var(--green)';
-      if(ds) ds.textContent = dm>0 ? ('за '+monthNameOf(ym)) : 'за месяц оплатили все 🎉';
+      if(ds) ds.textContent = (dm>0 ? 'за '+monthNameOf(ym) : 'за месяц оплатили все 🎉')
+        + (debtTotal ? ' · всего по школе '+fmt(+debtTotal)+(debtCount?' ('+debtCount+' должников)':'') : '');
+    } else if(debtTotal!=null){
+      de.textContent = fmt(+debtTotal);
+      de.style.color = +debtTotal>0 ? 'var(--red,#c00)' : 'var(--green)';
+      if(ds) ds.textContent = 'всего по школе' + (debtCount?' · '+debtCount+' должников':'');
     } else if(false){
       de.textContent = fmt(+debtTotal);
       de.style.color = +debtTotal>0 ? 'var(--red,#c00)' : 'var(--green)';
@@ -2144,6 +2148,17 @@ function renderFinance() {
       const word = (n % 10 === 1 && n % 100 !== 11) ? 'счёт' : ((n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 10 || n % 100 >= 20)) ? 'счёта' : 'счетов');
       psp.textContent = 'помесячными ' + fmt(sh) + ' (' + n + ' ' + word + ')' + (lg ? ' · абонементы ' + fmt(lg) : '');
     } else psp.textContent='';
+  }
+  // чем платили: способ берётся из CRM (колонка «Способ оплаты» в счёте)
+  const pw=document.getElementById('paidWays');
+  if(pw){
+    const w = (pb && pb.ways && pb.ways[ym]) || null;
+    if(w && Object.keys(w).length){
+      pw.textContent = Object.entries(w).sort((a,b)=>b[1]-a[1])
+        .map(function(e){ return e[0].toLowerCase()+' '+fmt(Math.round(e[1])); }).join(' · ');
+    } else if(pb){
+      pw.textContent = 'способы оплаты: обнови закладку «💳 BigBen → оплаты» и нажми её в CRM';
+    } else pw.textContent='';
   }
   const ps=document.getElementById('paidSub');
   if(ps && pb && rev) ps.textContent = Math.round(pNet/rev*100)+'% от начисленного · по счетам' + (pb.unpaid[ym] ? ' · не оплачено ' + fmt(Math.round(pb.unpaid[ym])) : '');
@@ -3673,7 +3688,10 @@ async function __payScan(target) {
             const tx = (i) => c[i].textContent.replace(/\s+/g, ' ').trim();
             if (!/^\S{1,4}-\d+/.test(tx(0))) return;
             const st = tx(8);
-            inv.push([cap, uid, tx(2), tx(3), parseFloat(tx(5)) || 0, /^оплачено/i.test(st) ? 'p' : /^не оплачено/i.test(st) ? 'u' : 'o', (st.match(/\d{2}-\d{2}-\d{4}/) || [''])[0]]);
+            // способ оплаты — выпадающий список в 7-й колонке, берём отмеченный вариант
+            const sel = c[6] ? c[6].querySelector('option[selected]') : null;
+            const way = sel ? sel.textContent.replace(/\s+/g, ' ').trim() : '';
+            inv.push([cap, uid, tx(2), tx(3), parseFloat(tx(5)) || 0, /^оплачено/i.test(st) ? 'p' : /^не оплачено/i.test(st) ? 'u' : 'o', (st.match(/\d{2}-\d{2}-\d{4}/) || [''])[0], /не выбран/i.test(way) ? '' : way]);
           });
           if (ts[1]) [...ts[1].querySelectorAll('tr')].slice(1).forEach((tr) => {
             const c = [...tr.children].map((x) => x.textContent.replace(/\s+/g, ' ').trim());
