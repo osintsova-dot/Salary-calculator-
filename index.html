@@ -1602,6 +1602,20 @@ if (!localStorage.getItem('ss_adminmin95')) {
   if (fixedState.adminMin === 80000) { fixedState.adminMin = 95000; localStorage.setItem('ss_fixed', JSON.stringify(fixedState)); }
   localStorage.setItem('ss_adminmin95', '1');
 }
+// Тот же пол лежит внутри каждого сохранённого месяца и подставляется при переключении.
+// Переводим только месяцы нового учебного года (с сентября 2026) — прошлые оставляем как было,
+// это история выплат, её править нельзя.
+if (!localStorage.getItem('ss_adminmin95h')) {
+  try {
+    const h = JSON.parse(localStorage.getItem('ss_salary_history') || '{}');
+    let changed = 0;
+    Object.keys(h).forEach(function (m) {
+      if (m >= '2026-09' && h[m] && h[m].fixed && h[m].fixed.adminMin === 80000) { h[m].fixed.adminMin = 95000; changed++; }
+    });
+    if (changed) localStorage.setItem('ss_salary_history', JSON.stringify(h));
+  } catch (e) {}
+  localStorage.setItem('ss_adminmin95h', '1');
+}
 // у старых сохранённых абонементов нет группы — проставляем по фамилии (скидка вычитается в группе ребёнка)
 (function () {
   const G = { 'мурзагулов': 'GMF 1A', 'панкова': 'GMF 2B', 'батяновск': 'GMF 2B', 'ботяновск': 'GMF 2B', 'колесникова': 'GMF 2A',
