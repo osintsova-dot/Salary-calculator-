@@ -899,6 +899,7 @@
       <div class="card-label">✅ Оплачено за месяц <span style="font-size:9px;color:var(--gray-400)">факт из CRM</span></div>
       <div class="card-value green" id="paidReal">—</div>
       <div class="card-sub" id="paidSub">за этот учебный месяц</div>
+      <div class="card-sub" id="paidSplit" style="color:var(--gray-400)"></div>
     </div>
     <div class="card">
       <div class="card-label">⚠️ Долг <span style="font-size:9px;color:var(--gray-400)">факт из CRM</span></div>
@@ -1957,16 +1958,21 @@ function payByMonth() {
   let d = null; try { d = JSON.parse(localStorage.getItem('ss_pay') || 'null'); } catch (e) {}
   if (!d || !Array.isArray(d.inv)) return null;
   const paid = {}, unpaid = {}, unpaidN = {}, refunds = {};
+  const shortPaid = {}, longPaid = {}, shortN = {};   // помесячные счета и доли длинных абонементов
   d.inv.forEach(x => {
     const months = invMonths(x[2], x[3]); if (!months.length) return;
     const part = (+x[4] || 0) / months.length;
+    const isLong = months.length > 1;
     months.forEach(k => {
-      if (x[5] === 'p') paid[k] = (paid[k] || 0) + part;
-      else if (x[5] === 'u') { unpaid[k] = (unpaid[k] || 0) + part; unpaidN[k] = (unpaidN[k] || 0) + 1; }
+      if (x[5] === 'p') {
+        paid[k] = (paid[k] || 0) + part;
+        if (isLong) longPaid[k] = (longPaid[k] || 0) + part;
+        else { shortPaid[k] = (shortPaid[k] || 0) + part; shortN[k] = (shortN[k] || 0) + 1; }
+      } else if (x[5] === 'u') { unpaid[k] = (unpaid[k] || 0) + part; unpaidN[k] = (unpaidN[k] || 0) + 1; }
     });
   });
   (d.ref || []).forEach(r => { const t = ruDate(r[3]); if (t) { const k = ymOf(t); refunds[k] = (refunds[k] || 0) + (+r[2] || 0); } });
-  return { at: d.at, paid, unpaid, unpaidN, refunds };
+  return { at: d.at, paid, unpaid, unpaidN, refunds, shortPaid, longPaid, shortN };
 }
 function paidNet(pb, ym) { return Math.round((pb.paid[ym] || 0) - (pb.refunds[ym] || 0)); }
 async function fetchPayData() {
@@ -2113,15 +2119,31 @@ function renderFinance() {
   const debtCount=localStorage.getItem('ss_debt_count');
   if(de){
     const dm = debtMap[ym];
-    if(dm!=null){
+    // CRM разносит долг по месяцам только там, где месяц написан в комментарии,
+    // поэтому главная цифра — весь долг по школе, а месячная пометка уходит в подпись.
+    if(debtTotal!=null){
+      de.textContent = fmt(+debtTotal);
+      de.style.color = +debtTotal>0 ? 'var(--red,#c00)' : 'var(--green)';
+      if(ds) ds.textContent = 'всего по школе' + (debtCount?' · '+debtCount+' должников':'')
+        + (dm ? ' · за '+monthNameOf(ym)+' '+fmt(Math.round(dm)) : '');
+    } else if(dm!=null){
       de.textContent = fmt(Math.round(dm));
       de.style.color = dm>0 ? 'var(--red,#c00)' : 'var(--green)';
-      if(ds) ds.textContent = dm>0 ? ('за этот месяц'+(debtTotal?' · всего '+fmt(+debtTotal):'')) : 'за месяц оплатили все 🎉';
-    } else if(debtTotal!=null){
+      if(ds) ds.textContent = dm>0 ? ('за '+monthNameOf(ym)) : 'за месяц оплатили все 🎉';
+    } else if(false){
       de.textContent = fmt(+debtTotal);
       de.style.color = +debtTotal>0 ? 'var(--red,#c00)' : 'var(--green)';
       if(ds) ds.textContent = (debtCount?debtCount+' должников по школе':'всего по школе');
     } else { de.textContent='—'; if(ds) ds.textContent='обнови данные'; }
+  }
+  // живые деньги месяца отдельно от долей годовых абонементов, оплаченных весной
+  const psp=document.getElementById('paidSplit');
+  if(psp){
+    if(pb){
+      const sh=Math.round(pb.shortPaid[ym]||0), lg=Math.round(pb.longPaid[ym]||0), n=pb.shortN[ym]||0;
+      const word = (n % 10 === 1 && n % 100 !== 11) ? 'счёт' : ((n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 10 || n % 100 >= 20)) ? 'счёта' : 'счетов');
+      psp.textContent = 'помесячными ' + fmt(sh) + ' (' + n + ' ' + word + ')' + (lg ? ' · абонементы ' + fmt(lg) : '');
+    } else psp.textContent='';
   }
   const ps=document.getElementById('paidSub');
   if(ps && pb && rev) ps.textContent = Math.round(pNet/rev*100)+'% от начисленного · по счетам' + (pb.unpaid[ym] ? ' · не оплачено ' + fmt(Math.round(pb.unpaid[ym])) : '');
@@ -2601,6 +2623,7 @@ async function bbQuietRefresh() {
   } catch (e) {}
 }
 
+function monthNameOf(ym){ return monthNames[+ym.slice(5,7)-1] || ym; }
 const monthNames = ['январь','февраль','март','апрель','май','июнь',
   'июль','август','сентябрь','октябрь','ноябрь','декабрь'];
 
