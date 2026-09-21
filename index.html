@@ -1596,26 +1596,23 @@ function renderPremiumBlock() {
   });
 }
 let fixedState = Object.assign({}, FIXED_DEFAULTS, JSON.parse(localStorage.getItem('ss_fixed') || '{}'));
-// Договорённость с Натальей (сентябрь 2026): пол 80 000 → 95 000, процент прежний.
-// Переводим только нетронутое значение 80 000 — если сумма правилась руками, не лезем.
-if (!localStorage.getItem('ss_adminmin95')) {
+// Договорённость с Натальей (сентябрь 2026): пол администратора 80 000 → 95 000, процент прежний.
+// Пол хранится и в общих настройках, и внутри каждого сохранённого месяца (оттуда подставляется
+// при переключении), поэтому проходим по обоим — и делаем это при КАЖДОМ открытии: одноразовая
+// пометка не спасала, старое значение возвращалось из месяца и снова оседало в настройках.
+// Трогаем только ровно 80 000 (прежний пол по умолчанию) и только с сентября 2026 —
+// прошлый учебный год это история выплат, её править нельзя.
+(function () {
   if (fixedState.adminMin === 80000) { fixedState.adminMin = 95000; localStorage.setItem('ss_fixed', JSON.stringify(fixedState)); }
-  localStorage.setItem('ss_adminmin95', '1');
-}
-// Тот же пол лежит внутри каждого сохранённого месяца и подставляется при переключении.
-// Переводим только месяцы нового учебного года (с сентября 2026) — прошлые оставляем как было,
-// это история выплат, её править нельзя.
-if (!localStorage.getItem('ss_adminmin95h')) {
   try {
     const h = JSON.parse(localStorage.getItem('ss_salary_history') || '{}');
     let changed = 0;
     Object.keys(h).forEach(function (m) {
-      if (m >= '2026-09' && h[m] && h[m].fixed && h[m].fixed.adminMin === 80000) { h[m].fixed.adminMin = 95000; changed++; }
+      if (m >= '2026-09' && h[m] && h[m].fixed && +h[m].fixed.adminMin === 80000) { h[m].fixed.adminMin = 95000; changed++; }
     });
     if (changed) localStorage.setItem('ss_salary_history', JSON.stringify(h));
   } catch (e) {}
-  localStorage.setItem('ss_adminmin95h', '1');
-}
+})();
 // у старых сохранённых абонементов нет группы — проставляем по фамилии (скидка вычитается в группе ребёнка)
 (function () {
   const G = { 'мурзагулов': 'GMF 1A', 'панкова': 'GMF 2B', 'батяновск': 'GMF 2B', 'ботяновск': 'GMF 2B', 'колесникова': 'GMF 2A',
