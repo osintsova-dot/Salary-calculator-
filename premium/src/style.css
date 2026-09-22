@@ -37,3 +37,25 @@ body[data-view=admin] #fixed-payments .administrator-row{display:flex!important;
 .admin-explanation p{font-size:13px;line-height:1.7;color:#73647d;margin-top:8px}
 
 body[data-view=admin] .fixed-payment-rows>div:not(.administrator-row){display:none!important}
+
+.teacher-name:is(button){border:0;background:none;padding:6px 0;color:inherit;text-align:left;cursor:pointer;font-family:inherit;display:inline-flex;align-items:center;gap:10px}
+.teacher-name:is(button)::after{content:'';width:7px;height:7px;border-right:1.5px solid var(--purple);border-bottom:1.5px solid var(--purple);transform:rotate(45deg);transition:transform .18s;flex-shrink:0;margin:0 3px 4px}
+.teacher-name[aria-expanded=true]::after{transform:rotate(225deg);margin-bottom:0}
+.teacher-name:is(button):hover{color:var(--purple)}
+.teacher-name:is(button):focus-visible{outline:2px solid var(--purple);outline-offset:4px;border-radius:3px}
+.teacher-block .table-scroll[hidden]{display:none!important}
+.teacher-block:not(.is-expanded) .teacher-header{border-bottom:0}
+@media(prefers-reduced-motion:reduce){.teacher-name:is(button)::after{transition:none}}
+
+.finance-toggle{display:flex;align-items:center;justify-content:space-between;gap:18px;width:100%;border:0;background:#fff;color:var(--gray-900);padding:22px 24px;text-align:left;font:650 14px var(--font);cursor:pointer;border-radius:11px}
+.finance-toggle::after{content:'';width:8px;height:8px;border-right:1.5px solid var(--purple);border-bottom:1.5px solid var(--purple);transform:rotate(45deg);flex-shrink:0;transition:transform .18s}
+.finance-toggle[aria-expanded=true]::after{transform:rotate(225deg)}
+.finance-toggle:hover{background:#faf8fd}
+.finance-toggle:focus-visible{outline:2px solid var(--purple);outline-offset:-4px}
+body .legacy-content .collapsible-finance[data-collapsed=true]>:not(.finance-toggle){display:none!important}
+body .legacy-content .deposit-block.collapsible-finance{flex-wrap:wrap;padding:0;gap:0}
+.deposit-block.collapsible-finance>.finance-toggle{background:transparent;color:white;flex-basis:100%}
+.deposit-block.collapsible-finance>.finance-toggle::after{border-color:white}
+.deposit-block.collapsible-finance>div{padding:20px;flex:1 1 180px}
+body[data-view=admin] #fixed-payments>.finance-toggle{display:none}
+@media(prefers-reduced-motion:reduce){.finance-toggle::after{transition:none}}
