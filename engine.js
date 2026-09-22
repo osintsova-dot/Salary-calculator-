@@ -657,12 +657,23 @@ function renderCash(t) {
       if (expected == null) {          // счета месяца-источника ещё не выставлены — считать не из чего
         cl.textContent = '—';
         if (cls) cls.textContent = 'счета за ' + srcName.toLowerCase() + ' ещё не выставлены';
+        const fs0 = document.getElementById('freeSub');   // «Свободно на руки» остаётся по начислениям — честно об этом пишем
+        if (fs0) fs0.textContent = 'по начислениям месяца — счета за ' + srcName.toLowerCase() + ' ещё не выставлены';
       } else {
         const takeable = expected - salaries - other - (t.summer || 0) + (t.owner || 0);   // минус фонд лета, плюс моя ЗП педагога
         cl.textContent = fmt(takeable);
         if (cls) cls.textContent = 'поступления за ' + srcName.toLowerCase() + ' − ЗП за ' + monthNames[m - 1]
           + ' − обязательства − фонд лета · по уже пришедшему '
           + fmt(came - salaries - other - (t.summer || 0) + (t.owner || 0));
+        // «Свободно на руки» — то же самое, но ещё и за вычетом депозита на отпускные:
+        // это деньги, которые реально можно тратить, а не те, что лежат в школе под будущие выплаты.
+        const spendable = takeable - (t.deposit || 0);
+        const fa = document.getElementById('freeAmt'), fs = document.getElementById('freeSub');
+        if (fa) { fa.textContent = fmt(spendable); fa.style.color = spendable >= 0 ? 'var(--green)' : 'var(--red)'; }
+        if (fs) fs.textContent = 'по кассе: поступления за ' + srcName.toLowerCase() + ' − ЗП − обязательства − депозит − фонд лета';
+        window.__freeCash = spendable;
+        try { const fc = JSON.parse(localStorage.getItem('ss_free_cash') || '{}'); fc[ym] = Math.max(0, Math.round(spendable)); localStorage.setItem('ss_free_cash', JSON.stringify(fc)); } catch (e) {}
+        pushSchoolToFamily(ym, Math.max(0, Math.round(spendable)));
       }
     }
   }
