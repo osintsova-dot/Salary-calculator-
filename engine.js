@@ -670,7 +670,8 @@ function renderCash(t) {
         const spendable = takeable - (t.deposit || 0);
         const fa = document.getElementById('freeAmt'), fs = document.getElementById('freeSub');
         if (fa) { fa.textContent = fmt(spendable); fa.style.color = spendable >= 0 ? 'var(--green)' : 'var(--red)'; }
-        if (fs) fs.textContent = 'по кассе: поступления за ' + srcName.toLowerCase() + ' − ЗП − обязательства − депозит − фонд лета';
+        if (fs) fs.textContent = 'по кассе: поступления за ' + srcName.toLowerCase()
+          + ' − ЗП − обязательства − депозит − фонд лета · моя ЗП педагога ' + fmt(t.owner || 0) + ' уже внутри';
         window.__freeCash = spendable;
         try { const fc = JSON.parse(localStorage.getItem('ss_free_cash') || '{}'); fc[ym] = Math.max(0, Math.round(spendable)); localStorage.setItem('ss_free_cash', JSON.stringify(fc)); } catch (e) {}
         pushSchoolToFamily(ym, Math.max(0, Math.round(spendable)));
