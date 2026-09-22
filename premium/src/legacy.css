@@ -1,0 +1,797 @@
+:root {
+    --purple: #6C3FC5;
+    --purple-light: #EDE8FA;
+    --purple-mid: #9B72E8;
+    --yellow: #F5C842;
+    --yellow-light: #FFFBEA;
+    --green: #22C55E;
+    --green-light: #DCFCE7;
+    --red: #EF4444;
+    --red-light: #FEE2E2;
+    --gray-50: #F9F9F9;
+    --gray-100: #F0F0F0;
+    --gray-200: #E0E0E0;
+    --gray-400: #A0A0A0;
+    --gray-600: #555;
+    --gray-900: #1A1A1A;
+    --font: 'Inter', sans-serif;
+    --mono: 'Fira Mono', monospace;
+    --px: 24px;            /* горизонтальный отступ блоков; на телефоне ужимается */
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: var(--font);
+    background: var(--gray-50);
+    color: var(--gray-900);
+    min-height: 100vh;
+  }
+
+  header {
+    background: var(--purple);
+    padding: 20px 32px;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+  }
+
+  .logo-mark {
+    width: 36px; height: 36px;
+    background: var(--yellow);
+    border-radius: 10px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 18px;
+  }
+
+  header h1 {
+    color: #fff;
+    font-size: 18px;
+    font-weight: 600;
+    letter-spacing: -0.3px;
+  }
+
+  header span {
+    color: rgba(255,255,255,0.55);
+    font-size: 13px;
+    margin-left: auto;
+    font-weight: 400;
+  }
+
+  .container {
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 28px 24px 60px;
+  }
+
+  /* MONTH SELECTOR */
+  .month-bar {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 28px;
+  }
+
+  .month-bar label {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--gray-600);
+  }
+
+  .month-bar input[type=month] {
+    font-family: var(--font);
+    font-size: 14px;
+    border: 1.5px solid var(--gray-200);
+    border-radius: 8px;
+    padding: 7px 12px;
+    color: var(--gray-900);
+    background: #fff;
+    cursor: pointer;
+  }
+
+  .month-bar input[type=month]:focus {
+    outline: none;
+    border-color: var(--purple);
+  }
+
+  /* обёртка кнопок панели месяца: на десктопе переносится, на телефоне — лента */
+  .month-actions {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
+    flex: 1;
+  }
+
+  /* SUMMARY CARDS */
+  .summary-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 14px;
+    margin-bottom: 32px;
+  }
+
+  .card {
+    background: #fff;
+    border-radius: 14px;
+    padding: 18px 20px;
+    border: 1.5px solid var(--gray-100);
+  }
+
+  .card-label {
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    color: var(--gray-400);
+    margin-bottom: 8px;
+  }
+
+  .card-value {
+    font-family: var(--mono);
+    font-size: 22px;
+    font-weight: 500;
+    color: var(--gray-900);
+  }
+
+  .card-value.purple { color: var(--purple); }
+  .card-value.green { color: var(--green); }
+
+  .card-sub {
+    font-size: 11px;
+    color: var(--gray-400);
+    margin-top: 4px;
+  }
+
+  /* TEACHER SECTIONS */
+  .teacher-block {
+    background: #fff;
+    border-radius: 16px;
+    border: 1.5px solid var(--gray-100);
+    margin-bottom: 20px;
+    overflow: hidden;
+  }
+
+  .teacher-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 18px 24px;
+    border-bottom: 1.5px solid var(--gray-100);
+    background: var(--gray-50);
+  }
+
+  .teacher-avatar {
+    width: 36px; height: 36px;
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 14px;
+    font-weight: 700;
+    color: #fff;
+    flex-shrink: 0;
+  }
+
+  .teacher-name {
+    font-size: 15px;
+    font-weight: 600;
+  }
+
+  .teacher-meta {
+    font-size: 12px;
+    color: var(--gray-400);
+  }
+
+  .teacher-total {
+    margin-left: auto;
+    text-align: right;
+  }
+
+  .teacher-total-label {
+    font-size: 11px;
+    color: var(--gray-400);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  .teacher-total-value {
+    font-family: var(--mono);
+    font-size: 18px;
+    font-weight: 500;
+    color: var(--purple);
+  }
+
+  /* GROUPS TABLE */
+  .groups-table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+
+  .groups-table th {
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--gray-400);
+    padding: 10px 16px;
+    text-align: left;
+    border-bottom: 1px solid var(--gray-100);
+    background: #FAFAFA;
+  }
+
+  .groups-table th.right { text-align: right; }
+
+  .groups-table td {
+    padding: 10px 16px;
+    font-size: 13px;
+    border-bottom: 1px solid var(--gray-100);
+    vertical-align: middle;
+  }
+
+  .groups-table tr:last-child td { border-bottom: none; }
+
+  .groups-table tr:hover td { background: var(--purple-light); }
+
+  .group-name {
+    font-weight: 500;
+  }
+
+  .badge {
+    display: inline-block;
+    font-size: 10px;
+    font-weight: 600;
+    padding: 2px 7px;
+    border-radius: 20px;
+    letter-spacing: 0.3px;
+  }
+
+  .badge-60 { background: var(--purple-light); color: var(--purple); }
+  .badge-90 { background: var(--yellow-light); color: #92650A; }
+
+  /* COUNTER INPUT */
+  .counter {
+    display: flex;
+    align-items: center;
+    gap: 0;
+    width: 110px;
+  }
+
+  .counter button {
+    width: 28px; height: 28px;
+    border: 1.5px solid var(--gray-200);
+    background: var(--gray-50);
+    font-size: 16px;
+    cursor: pointer;
+    color: var(--gray-600);
+    display: flex; align-items: center; justify-content: center;
+    transition: background 0.15s;
+    flex-shrink: 0;
+  }
+
+  .counter button:first-child { border-radius: 7px 0 0 7px; }
+  .counter button:last-child { border-radius: 0 7px 7px 0; }
+  .counter button:hover { background: var(--purple-light); color: var(--purple); border-color: var(--purple-mid); }
+
+  .counter input {
+    width: 54px;
+    height: 28px;
+    text-align: center;
+    border: 1.5px solid var(--gray-200);
+    border-left: none; border-right: none;
+    font-family: var(--mono);
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--gray-900);
+    background: #fff;
+  }
+
+  .counter input:focus { outline: none; background: var(--purple-light); }
+
+  .pupils-status {
+    display: inline-block;
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    margin-right: 6px;
+    flex-shrink: 0;
+  }
+
+  .status-full { background: var(--green); }
+  .status-good { background: var(--yellow); }
+  .status-low { background: var(--red); }
+  .status-empty { background: var(--gray-200); }
+
+  td.mono {
+    font-family: var(--mono);
+    font-size: 13px;
+    text-align: right;
+  }
+
+  td.mono.dim { color: var(--gray-400); }
+
+  /* TEACHER SUMMARY ROW */
+  .summary-row td {
+    background: var(--purple-light) !important;
+    font-weight: 600;
+    border-top: 2px solid var(--purple-mid);
+  }
+
+  /* ADMIN BLOCK */
+  .admin-block {
+    background: #fff;
+    border-radius: 16px;
+    border: 1.5px solid var(--gray-100);
+    padding: 22px 24px;
+    margin-bottom: 20px;
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    flex-wrap: wrap;
+  }
+
+  .admin-info { flex: 1; }
+  .admin-name { font-size: 15px; font-weight: 600; }
+  .admin-rule { font-size: 12px; color: var(--gray-400); margin-top: 2px; }
+
+  .admin-calc {
+    display: flex;
+    gap: 24px;
+    flex-wrap: wrap;
+  }
+
+  .admin-item { text-align: right; }
+  .admin-item-label { font-size: 11px; color: var(--gray-400); text-transform: uppercase; letter-spacing: 0.5px; }
+  .admin-item-value { font-family: var(--mono); font-size: 18px; font-weight: 500; }
+  .admin-item-value.green { color: var(--green); }
+  .admin-item-value.orange { color: #D97706; }
+
+  /* POTENTIAL BANNER */
+  .potential-banner {
+    background: var(--yellow-light);
+    border: 1.5px solid var(--yellow);
+    border-radius: 12px;
+    padding: 14px 20px;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    margin-bottom: 20px;
+  }
+
+  .potential-banner .icon { font-size: 22px; }
+  .potential-banner p { font-size: 13px; color: #7A5000; }
+  .potential-banner strong { font-weight: 600; }
+
+  /* DEPOSIT BLOCK */
+  .deposit-block {
+    background: var(--purple-light);
+    border-radius: 12px;
+    padding: 16px 20px;
+    display: flex;
+    gap: 24px;
+    flex-wrap: wrap;
+    align-items: center;
+  }
+
+  .deposit-block p { font-size: 13px; color: var(--purple); }
+  .deposit-block strong { font-weight: 700; }
+
+  .deposit-item { text-align: center; }
+  .deposit-item-label { font-size: 11px; color: var(--purple-mid); text-transform: uppercase; letter-spacing: 0.5px; }
+  .deposit-item-value { font-family: var(--mono); font-size: 17px; font-weight: 600; color: var(--purple); }
+
+  /* SLIP BUTTON */
+  .btn-slip {
+    margin-left: auto;
+    background: none;
+    border: 1.5px solid var(--purple);
+    color: var(--purple);
+    font-family: var(--font);
+    font-size: 12px;
+    font-weight: 600;
+    padding: 5px 14px;
+    border-radius: 20px;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: background 0.15s, color 0.15s;
+  }
+  .btn-slip:hover { background: var(--purple); color: #fff; }
+
+  /* MODAL */
+  .tabs { display:flex; gap:8px; margin-bottom:18px; }
+  .tab-btn { flex:1; font-family:var(--font); font-size:14px; font-weight:700; padding:12px 14px;
+    border-radius:14px; cursor:pointer; border:1.5px solid var(--gray-200); background:#fff; color:var(--gray-500); transition:all .15s; }
+  .tab-btn.active { background:var(--purple); color:#fff; border-color:var(--purple); box-shadow:0 2px 10px rgba(108,63,197,.25); }
+  .p-row { display:flex; align-items:center; justify-content:space-between; gap:10px; padding:10px var(--px); border-bottom:1px solid var(--gray-100); }
+  .p-row .p-name { font-size:13px; color:var(--gray-800); border:none; background:none; font-family:var(--font); padding:2px 4px; border-radius:6px; flex:1; min-width:0; }
+  .p-row .p-name:focus { background:var(--gray-50); outline:1px solid var(--gray-200); }
+  .p-row .p-sum { font-family:var(--mono); font-size:14px; font-weight:700; color:var(--gray-900); border:none; background:none; text-align:right; width:110px; padding:2px 4px; border-radius:6px; }
+  .p-row .p-sum:focus { background:var(--gray-50); outline:1px solid var(--gray-200); }
+  .p-row .p-del { border:none; background:none; color:var(--gray-300); cursor:pointer; font-size:15px; padding:0 4px; }
+  .p-row .p-del:hover { color:var(--red, #c00); }
+  .modal-overlay {
+    display: none;
+    position: fixed; inset: 0;
+    background: rgba(30,10,60,0.45);
+    z-index: 100;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+  }
+  .modal-overlay.open { display: flex; }
+
+  .modal {
+    background: #fff;
+    border-radius: 20px;
+    max-width: 480px;
+    width: 100%;
+    max-height: 90vh;
+    overflow-y: auto;
+    box-shadow: 0 24px 60px rgba(0,0,0,0.25);
+  }
+
+  /* SLIP CONTENT */
+  .slip {
+    padding: 28px 28px 20px;
+    font-family: var(--font);
+  }
+
+  .slip-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 20px;
+    padding-bottom: 16px;
+    border-bottom: 2px solid var(--gray-100);
+  }
+
+  .slip-logo {
+    width: 40px; height: 40px;
+    background: var(--purple);
+    border-radius: 10px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 20px;
+  }
+
+  .slip-school { font-size: 11px; color: var(--gray-400); text-transform: uppercase; letter-spacing: 0.6px; }
+  .slip-title { font-size: 16px; font-weight: 700; color: var(--gray-900); }
+
+  .slip-period {
+    font-size: 12px;
+    color: var(--purple);
+    font-weight: 600;
+    margin-left: auto;
+    text-align: right;
+  }
+
+  .slip-name {
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--gray-900);
+    margin-bottom: 4px;
+  }
+
+  .slip-meta {
+    font-size: 12px;
+    color: var(--gray-400);
+    margin-bottom: 20px;
+  }
+
+  .slip-groups {
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 16px;
+    font-size: 12px;
+  }
+
+  .slip-groups th {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--gray-400);
+    font-weight: 600;
+    padding: 6px 8px;
+    text-align: left;
+    border-bottom: 1px solid var(--gray-100);
+  }
+  .slip-groups th.r { text-align: right; }
+
+  .slip-groups td {
+    padding: 7px 8px;
+    border-bottom: 1px solid var(--gray-100);
+    color: var(--gray-900);
+  }
+  .slip-groups td.r { text-align: right; font-family: var(--mono); font-size: 12px; }
+  .slip-groups tr:last-child td { border-bottom: none; }
+
+  .slip-divider {
+    border: none;
+    border-top: 2px dashed var(--gray-200);
+    margin: 16px 0;
+  }
+
+  .slip-total-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    margin-bottom: 8px;
+  }
+
+  .slip-total-label {
+    font-size: 13px;
+    color: var(--gray-600);
+  }
+
+  .slip-total-value {
+    font-family: var(--mono);
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--gray-900);
+  }
+
+  .slip-total-row.highlight .slip-total-label { font-weight: 700; color: var(--gray-900); font-size: 15px; }
+  .slip-total-row.highlight .slip-total-value { font-size: 22px; color: var(--purple); }
+
+  .slip-deposit-note {
+    background: var(--purple-light);
+    border-radius: 10px;
+    padding: 10px 14px;
+    font-size: 11px;
+    color: var(--purple);
+    margin-top: 12px;
+    line-height: 1.5;
+  }
+
+  .slip-footer {
+    font-size: 10px;
+    color: var(--gray-400);
+    text-align: center;
+    margin-top: 16px;
+    padding-top: 12px;
+    border-top: 1px solid var(--gray-100);
+  }
+
+  /* MODAL ACTIONS */
+  .modal-actions {
+    display: flex;
+    gap: 10px;
+    padding: 16px 28px 24px;
+    border-top: 1.5px solid var(--gray-100);
+  }
+
+  .btn-action {
+    flex: 1;
+    padding: 11px;
+    border-radius: 10px;
+    font-family: var(--font);
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    border: none;
+    transition: opacity 0.15s;
+  }
+  .btn-action:hover { opacity: 0.85; }
+  .btn-action.primary { background: var(--purple); color: #fff; }
+  .btn-action.secondary { background: var(--gray-100); color: var(--gray-900); }
+  .btn-action.copy { background: var(--yellow); color: #7A5000; }
+
+  @media print {
+    @page { margin: 10mm; size: A4; }
+    body > *:not(#printArea) { display: none !important; }
+    #printArea {
+      display: block !important;
+    }
+    .print-copy {
+      page-break-inside: avoid;
+      border: 1px solid #ccc;
+      padding: 16px 20px;
+      margin-bottom: 0;
+      font-family: Arial, sans-serif;
+      font-size: 11px;
+    }
+    .print-divider {
+      border: none;
+      border-top: 2px dashed #aaa;
+      margin: 8px 0;
+      text-align: center;
+    }
+    .print-cut-label {
+      text-align: center;
+      font-size: 9px;
+      color: #aaa;
+      letter-spacing: 2px;
+      margin: 4px 0;
+    }
+  }
+  /* ======================= ТЕЛЕФОН (<= 700px) =======================
+     Правило одно: на экране 375 px ничего не уезжает вбок и всё, во что
+     тыкают пальцем, не меньше 40 px. Таблица групп на телефоне перестаёт
+     быть таблицей и становится карточкой на группу.                     */
+  @media (max-width: 700px) {
+    :root { --px: 14px; }
+
+    body { -webkit-text-size-adjust: 100%; }
+    button, a, label, input { -webkit-tap-highlight-color: transparent; touch-action: manipulation; }
+
+    /* ШАПКА — липкая, с учётом «чёлки» в режиме приложения */
+    header {
+      position: sticky; top: 0; z-index: 20;
+      padding: calc(12px + env(safe-area-inset-top)) 14px 12px;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+    .logo-mark { width: 30px; height: 30px; font-size: 15px; border-radius: 8px; }
+    header h1 { font-size: 15px; line-height: 1.25; flex: 1; min-width: 0; }
+    header span { font-size: 11px; margin-left: 0; width: 100%; }
+
+    .container { padding: 14px var(--px) calc(40px + env(safe-area-inset-bottom)); }
+
+    /* ПАНЕЛЬ МЕСЯЦА — месяц во всю ширину, действия лентой с прокруткой вбок */
+    .month-bar { display: block; margin-bottom: 18px; }
+    .month-bar label { display: none; }
+    .month-bar input[type=month] {
+      width: 100%; height: 46px; font-size: 16px; padding: 0 12px; margin-bottom: 9px;
+    }
+    .month-actions {
+      flex-wrap: nowrap;
+      /* лента уходит под края экрана — видно, что её листают */
+      margin: 0 calc(var(--px) * -1);
+      padding: 0 var(--px) 2px;
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+      scrollbar-width: none;
+      /* подсказка, что ленту можно листать */
+      -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 26px), transparent 100%);
+      mask-image: linear-gradient(to right, #000 calc(100% - 26px), transparent 100%);
+    }
+    .month-actions::-webkit-scrollbar { display: none; }
+    .month-actions > button, .month-actions > a {
+      flex: 0 0 auto;
+      min-height: 42px; display: flex; align-items: center;
+      padding: 0 14px !important; font-size: 13px !important;
+      align-self: stretch !important; white-space: nowrap;
+    }
+    .month-actions > #monthNote { flex: 0 0 auto; align-self: center; }
+    .month-actions > #monthNote:empty { display: none; }
+
+    /* КАРТОЧКИ СВОДКИ — по две в ряд, первая во всю ширину */
+    .summary-grid { grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 22px; }
+    .summary-grid .card:first-child { grid-column: 1 / -1; }
+    .card { padding: 13px 14px; border-radius: 12px; }
+    .card-label { font-size: 10px; letter-spacing: 0.4px; margin-bottom: 6px; }
+    .card-value { font-size: 19px; }
+    .summary-grid .card:first-child .card-value { font-size: 26px; }
+    .card-sub { font-size: 10px; }
+
+    /* ПЕДАГОГ */
+    .teacher-header { flex-wrap: wrap; gap: 10px; padding: 14px var(--px); }
+    .teacher-total { margin-left: auto; }
+    .btn-slip { margin-left: 0; order: 3; width: 100%; min-height: 40px; font-size: 13px; }
+
+    /* ТАБЛИЦА ГРУПП -> КАРТОЧКИ.
+       Порядок ячеек: название · формат · счётчик · выручка · 25% · депозит · на руки */
+    .groups-table, .groups-table tbody, .groups-table tr, .groups-table td { display: block; width: 100%; }
+    .groups-table thead { display: none; }
+    .groups-table tr:hover td { background: none; }
+
+    .groups-table tbody tr {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px 16px;
+      padding: 14px var(--px);
+      border-bottom: 1px solid var(--gray-100);
+    }
+    .groups-table td { padding: 0; border: none; font-size: 13px; }
+
+    .groups-table tr:not(.summary-row) td:nth-child(1) { grid-column: 1 / -1; font-size: 15px; font-weight: 600; }
+    .groups-table tr:not(.summary-row) td:nth-child(1) input[type=checkbox] { width: 20px; height: 20px; }
+    .groups-table tr:not(.summary-row) td:nth-child(2) { align-self: center; }
+    .groups-table tr:not(.summary-row) td:nth-child(3) { justify-self: end; }
+
+    /* денежные ячейки: подпись слева, число справа */
+    .groups-table tr:not(.summary-row) td:nth-child(n+4),
+    .summary-row td:nth-child(n+2) {
+      display: flex; align-items: baseline; justify-content: space-between; gap: 8px;
+      text-align: right;
+      border-top: 1px dashed var(--gray-100);
+      padding-top: 7px;
+    }
+    .groups-table td.mono { font-size: 14px; }
+    .groups-table tr:not(.summary-row) td:nth-child(n+4)::before,
+    .summary-row td:nth-child(n+2)::before {
+      font-family: var(--font);
+      font-size: 10px; font-weight: 600; letter-spacing: 0.4px;
+      text-transform: uppercase; color: var(--gray-400);
+      white-space: nowrap;
+    }
+    .groups-table tr:not(.summary-row) td:nth-child(4)::before { content: "Выручка"; }
+    .groups-table tr:not(.summary-row) td:nth-child(5)::before { content: "25%"; }
+    .groups-table tr:not(.summary-row) td:nth-child(6)::before { content: "Депозит"; }
+    .groups-table tr:not(.summary-row) td:nth-child(7)::before { content: "На руки"; color: var(--gray-600); }
+    .groups-table tr:not(.summary-row) td:nth-child(7) { font-size: 15px !important; }
+
+    /* строка «Итого» — первая ячейка с colspan, дальше те же четыре суммы */
+    .summary-row td { background: none !important; }
+    .groups-table tbody tr.summary-row {
+      background: var(--purple-light);
+      border-top: 2px solid var(--purple-mid);
+      border-bottom: none;
+    }
+    .summary-row td:nth-child(1) { grid-column: 1 / -1; font-size: 14px; }
+    .summary-row td:nth-child(n+2)::before { color: var(--purple-mid); }
+    .summary-row td:nth-child(2)::before { content: "Выручка"; }
+    .summary-row td:nth-child(3)::before { content: "25%"; }
+    .summary-row td:nth-child(4)::before { content: "Депозит"; }
+    .summary-row td:nth-child(5)::before { content: "На руки"; }
+
+    /* СЧЁТЧИК УЧЕНИКОВ — под палец, без зума при фокусе (16px) */
+    .counter { width: auto; }
+    .counter button { width: 40px; height: 40px; font-size: 20px; }
+    .counter input,
+    .counter input[type=number] { width: 54px !important; height: 40px !important; font-size: 16px !important; }
+
+    /* ФИКСИРОВАННЫЕ ВЫПЛАТЫ, КРЕДИТЫ, КОПИЛКИ, ПРЕМИЯ — в столбик, а не в строку */
+    .admin-block {
+      padding: 16px var(--px); gap: 14px;
+      align-items: stretch;   /* иначе шапка блока сжимается по тексту и уезжает в центр */
+    }
+    .admin-item { text-align: left; }
+    .admin-item-value { font-size: 16px; }
+    .admin-calc { gap: 14px; }
+
+    /* строка фонда выплат: название сверху, суммы под ним и слева */
+    .fx-row { flex-wrap: wrap; gap: 10px; align-items: flex-start !important; }
+    .fx-row > div:first-child { flex: 1 1 100%; }
+    .fx-row .fx-vals { gap: 16px !important; flex-wrap: wrap; justify-content: flex-start !important; }
+    .fx-row .admin-item-label { text-align: left !important; }
+    .fx-row .btn-slip { width: auto; margin-left: 0; }
+
+    /* кнопки-карандаши и «квиток» в этих строках не должны прыгать */
+    .fx-row button { min-height: 34px; }
+
+    /* ДЕПОЗИТНЫЙ ФОНД */
+    .deposit-block { padding: 14px var(--px); gap: 14px; }
+    .deposit-item { text-align: left; }
+
+    /* БАННЕР ПОТЕНЦИАЛА */
+    .potential-banner { padding: 12px 14px; gap: 10px; align-items: flex-start; }
+    .potential-banner p { font-size: 12.5px; line-height: 1.45; }
+
+    /* МОДАЛКИ — шторкой снизу, как в «Бюджете семьи» */
+    .modal-overlay { align-items: flex-end; padding: 0; }
+    .modal {
+      max-width: none !important; width: 100%;
+      border-radius: 18px 18px 0 0;
+      max-height: 92vh; max-height: 92dvh;
+      padding-bottom: env(safe-area-inset-bottom);
+    }
+    .slip { padding: 20px var(--px) 14px; }
+    .slip-header { gap: 10px; margin-bottom: 16px; }
+    .slip-period { font-size: 11px; }
+    .slip-name { font-size: 16px; }
+    /* квиток: 7 колонок не влезают — прокрутка только у таблицы */
+    .slip-groups {
+      display: block; overflow-x: auto; -webkit-overflow-scrolling: touch; white-space: nowrap;
+      margin: 0 calc(var(--px) * -1) 16px; padding: 0 var(--px);
+      scrollbar-width: none;
+    }
+    .slip-groups::-webkit-scrollbar { display: none; }
+    .modal-actions {
+      padding: 14px var(--px) calc(18px + env(safe-area-inset-bottom));
+      flex-wrap: wrap;
+      position: sticky; bottom: 0; background: #fff; z-index: 2;
+    }
+    .btn-action { min-height: 44px; font-size: 14px; flex: 1 1 100px; }
+    .tabs { gap: 6px; }
+    .tab-btn { font-size: 13px; padding: 11px 8px; min-height: 44px; }
+    .p-row { padding: 10px var(--px); }
+    .p-row .p-sum { width: 92px; font-size: 15px; }
+
+    /* тап-цели в мелких кнопках-карандашах и чекбоксах */
+    .admin-block input[type=checkbox],
+    .admin-block input[type=radio] { width: 18px; height: 18px; }
+  }
+
+  /* совсем узкие экраны (старые Android ~320 px) */
+  @media (max-width: 340px) {
+    .summary-grid { grid-template-columns: 1fr; }
+    .groups-table tbody tr { grid-template-columns: 1fr; }
+    .groups-table tr:not(.summary-row) td:nth-child(3) { justify-self: start; }
+  }

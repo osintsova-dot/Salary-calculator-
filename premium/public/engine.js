@@ -1,0 +1,2539 @@
+
+var FAMILY_SYNC='https://functions.yandexcloud.net/d4eebjc2qs4ku5ijpn8j', famTimer=null, famLast={};
+const DEPOSIT = 2500;
+const ADMIN_MIN = 80000;
+const ADMIN_PCT = 0.05;
+const TEACHER_PCT = 0.25;
+const TARIFF = { 60: 8000, 90: 10000 };
+const MAX_PUPILS = 12;
+// Editable fixed payments — loaded from localStorage
+// Выбыли из группы и НЕ БЫЛИ ни на одном уроке (посещаемость CRM) — оплату возвращаем, педагогу не считаем.
+// Сумма = то, что CRM начислила за месяц в этой группе. Только выбывшие; остальных по пропускам не считаем.
+// Список общий для всех устройств (в коде); проверяется раз в месяц.
+const NOSHOW = [
+  { ym: '2026-09', group: 'GMF 3B',          name: 'Гончарова Варвара',  sum: 2000 },
+  { ym: '2026-09', group: 'GMF 2A',          name: 'Ботяновский Роман',  sum: 1000 },
+  { ym: '2026-09', group: 'GMF 4B',          name: 'Минибаев Данис',     sum: 4000 },
+  { ym: '2026-09', group: 'Get Involved 1B', name: 'Назаров Руслан',     sum: 3750 },
+  { ym: '2026-09', group: 'GMF 3D',          name: 'Нурова Айгулина',    sum: 3000 },
+  { ym: '2026-09', group: 'GMF 3D',          name: 'Бейбулатов Рамиль',  sum: 1000 },
+  { ym: '2026-09', group: 'GMF 3D',          name: 'Дмитриев Роман',     sum: 3000 },
+  { ym: '2026-09', group: 'Get Involved 2A', name: 'Звонкова Мария',     sum: 1250 },
+  { ym: '2026-09', group: 'Get Involved 2A', name: 'Генов Марк',         sum: 1250 },
+  { ym: '2026-09', group: 'Prepare 5A',      name: 'Гончарова Варвара',  sum: 1250 },
+  { ym: '2026-09', group: 'Get Involved 1A', name: 'Минибаев Данис (записан по ошибке 16–17.09)', sum: 1250 },
+];
+// ПЕРЕВОДЫ внутри месяца: ребёнок даёт ровно ОДИН полный абонемент. Новой группе добавляем остаток
+// до полного абонемента (минус то, что засчитано старой группе, где он был на уроках). Отрицательное —
+// если CRM начислила больше абонемента (был в старой группе + полный месяц в новой).
+const TRANSFER_ADJ = [
+  { ym: '2026-09', group: 'Get Involved 2A', name: 'Минибаев Данис (GMF 4B и GI 1A — не был; с 17.09 в GI 2A)', add: 5000 },
+  { ym: '2026-09', group: 'Get Involved 2B', name: 'Звонкова Мария (из GI 2A, там не была)',        add: 2500 },
+  { ym: '2026-09', group: 'Get Involved 1B', name: 'Пель Даниил (1 урок в GI 1A + полный месяц в 1B)', add: -1250 },
+  { ym: '2026-09', group: 'GMF 3C',          name: 'Нурова Айгулина (из GMF 3D, там не была)',      add: 3000 },
+  { ym: '2026-09', group: 'GMF 3D',          name: 'Сун-Си-Лан Арина (из GMF 3B, там 0 уроков)',    add: 1000 },
+  { ym: '2026-09', group: 'GMF 2B',          name: 'Ботяновский Роман (из GMF 2A, там не был)',     add: 1000 },
+];
+// РАННЯЯ ОПЛАТА: сентябрь можно было оплатить до мая по старой цене (7 500 вместо 8 000, 9 500 вместо 10 000).
+// Скидка = абонемент по цене ребёнка в CRM − оплаченный счёт; только дети на весь месяц в группе.
+// Как с длинными абонементами: учителям от реальной оплаты, Наталье — возвращается в базу. Только сентябрь 2026.
+const EARLY = [
+  { ym: '2026-09', group: 'GMF 3B',          sum: 1500, who: 'Воробьев, Лебедев, Казанцев' },
+  { ym: '2026-09', group: 'GMF 2A',          sum: 1000, who: 'Денисов, Мартынов' },
+  { ym: '2026-09', group: 'Mimi 3',          sum: 500,  who: 'Клусова' },
+  { ym: '2026-09', group: 'GMF 1A',          sum: 2000, who: 'Волошина, Евсюков, Комарова, Кузьмина' },
+  { ym: '2026-09', group: 'GMF 2B',          sum: 1000, who: 'Белых, Кузнецов' },
+  { ym: '2026-09', group: 'GMF 3A',          sum: 500,  who: 'Кузнецова Екатерина (счёт в 3B, учится в 3A)' },
+  { ym: '2026-09', group: 'GMF 3C',          sum: 1500, who: 'Кощеева, Попова, Саляхова (Кегич Андрей — счёт перенесён Натальей, оплачен полностью 7 600)' },
+  { ym: '2026-09', group: 'GMF 3D',          sum: 1500, who: 'Гаврилова, Крылова, Федотова' },
+  { ym: '2026-09', group: 'GMF 4A',          sum: 1975, who: 'Метляева Ксения (7 125 из 7 600), Прядко, Сиротинский, Ткаченко' },
+  { ym: '2026-09', group: 'GMF 4B',          sum: 1500, who: 'Астапенко, Долгополова, Евлаш' },
+  { ym: '2026-09', group: 'Get Involved 1A', sum: 1000, who: 'Галицков, Шикан' },
+  { ym: '2026-09', group: 'Get Involved 1B', sum: 500,  who: 'Зайцева Мария (счёт в 1A, учится в 1B)' },
+  { ym: '2026-09', group: 'Get Involved 2B', sum: 500,  who: 'Стручинский' },
+  { ym: '2026-09', group: 'Prepare 4A',      sum: 1500, who: 'Акимкин, Матвейченко, Плиговка' },
+  { ym: '2026-09', group: 'Prepare 5A',      sum: 500,  who: 'Кузнецова Алиса' },
+  { ym: '2026-09', group: 'Gateway B2',      sum: 500,  who: 'Зябкин' },
+];
+function earlyGroup(i, ym) {
+  const key = bbNorm(GROUPS[i].name), mon = ym || curYM();
+  return EARLY.reduce((s, e) => (e.ym === mon && bbNorm(e.group) === key) ? s + e.sum : s, 0);
+}
+function earlyMonth(ym) { const mon = ym || curYM(); return EARLY.reduce((s, e) => e.ym === mon ? s + e.sum : s, 0); }
+function transferAdjGroup(i, ym) {
+  const key = bbNorm(GROUPS[i].name), mon = ym || curYM();
+  return TRANSFER_ADJ.reduce((s, e) => (e.ym === mon && bbNorm(e.group) === key) ? s + e.add : s, 0);
+}
+function noShowGroup(i, ym) {
+  const key = bbNorm(GROUPS[i].name), mon = ym || curYM();
+  return NOSHOW.reduce((s, e) => (e.ym === mon && bbNorm(e.group) === key) ? s + e.sum : s, 0);
+}
+function noShowMonth(ym) { return NOSHOW.filter(e => e.ym === (ym || curYM())); }
+const FIXED_DEFAULTS = { cleaning: 33000, smm: 18000, rent: 200000, adminMin: 95000, otrabotki60: 0, otrabotki90: 0,
+  // Абонементы (для возврата их скидок в базу администратора). Каждый: месячная скидка
+  // + с какого по какой месяц активен. Возврат сам тает, когда абонемент кончается.
+  // ТОЛЬКО абонементы; семейные/индивидуальные скидки сюда НЕ входят.
+  abonements: [
+    { name: 'Мурзагулов Рома',  disc: 1200, from: '2026-09', until: '2027-05', group: 'GMF 1A' },
+    { name: 'Панкова Тая',      disc: 1200, from: '2026-09', until: '2027-05', group: 'GMF 2B' },
+    { name: 'Ботяновский Роман', disc: 1200, from: '2026-09', until: '2027-05', group: 'GMF 2B' },
+    { name: 'Колесникова Анна', disc: 1200, from: '2026-09', until: '2027-05', group: 'GMF 2A' },
+    { name: 'Погорелова Ксюша', disc: 1200, from: '2026-09', until: '2027-05', group: 'GMF 3B' },
+    { name: 'Осиян Тимур',      disc: 1500, from: '2026-09', until: '2027-05', group: 'Prepare 4A' },
+    { name: 'Елькина',          disc: 1500, from: '2026-09', until: '2027-05', group: 'Prepare 3A' },
+    { name: 'Цупрун',           disc: 500,  from: '2026-09', until: '2026-11', group: 'Get Involved 2A' },
+    { name: 'Юрченко Дмитрий',  disc: 1500, from: '2026-09', until: '2027-05', group: 'Gateway B2' },
+  ] };
+// Налоги и взносы: даты платежей, а не начисления. Правится кнопкой «список».
+const COST_DEFAULTS = [
+  { d: '31.08.2026', n: 'Реклама, типография, офисные товары', s: 140000 },
+];
+const TAX_DEFAULTS = [
+  { d: '31.08.2026', n: 'Страховые взносы, 3 кв.', s: 14400 },
+  { d: '31.08.2026', n: 'Патент, платёж 1', s: 6328 },
+  { d: '31.08.2026', n: 'Патент, платёж 2', s: 8365 },
+  { d: '31.12.2026', n: 'Страховые взносы, 4 кв.', s: 14400 },
+];
+
+// Premium criteria per teacher (stored in localStorage)
+const PREMIUM_DEFAULTS = {
+  'Екатерина Курагина': { base: false, events9: false, events7: false, events5: false, methods: false, decor: false, parents: false },
+  'Ксения Шиллер':     { base: false, events9: false, events7: false, events5: false, methods: false, decor: false, parents: false },
+  'Оксана Синцова':    { base: false, events9: false, events7: false, events5: false, methods: false, decor: false, parents: false },
+};
+let premiumState = JSON.parse(localStorage.getItem('ss_premium') || 'null') || JSON.parse(JSON.stringify(PREMIUM_DEFAULTS));
+function savePremiumState() { localStorage.setItem('ss_premium', JSON.stringify(premiumState)); }
+
+function calcPremiumFund(teacher) {
+  const tGroups = GROUPS.filter((g, i) => g.teacher === teacher && isActive(i));
+  return tGroups.length * 2500 * 9; // 2500/group × 9 months
+}
+
+function calcPremiumPayout(teacher) {
+  const p = premiumState[teacher] || {};
+  const fund = calcPremiumFund(teacher);
+  let pct = 0;
+  if (p.base) pct += 50;
+  // events: pick highest tier only
+  if (p.events9) pct += 20;
+  else if (p.events7) pct += 15;
+  else if (p.events5) pct += 10;
+  if (p.methods) pct += 10;
+  if (p.decor) pct += 10;
+  if (p.parents) pct += 10;
+  return { fund, pct, payout: Math.round(fund * pct / 100) };
+}
+
+function renderPremiumBlock() {
+  const teachers = [...new Set(GROUPS.map(g => g.teacher))];
+  const block = document.getElementById('premiumTeachersBlock');
+  let totalPayout = 0;
+
+  block.innerHTML = teachers.map(teacher => {
+    const color = TEACHER_COLORS[teacher];
+    const { fund, pct, payout } = calcPremiumPayout(teacher);
+    totalPayout += payout;
+    const p = premiumState[teacher] || {};
+
+    const criteria = [
+      { key: 'base',     label: 'Базовая часть: полный год, дисциплина, не более 1 жалобы', pct: '50%', type: 'single' },
+      { key: 'events',   label: 'Инициативные мероприятия', pct: 'до 20%', type: 'scale',
+        options: [
+          { key: 'events9', label: '9+ мероприятий → 20%' },
+          { key: 'events7', label: '7–8 → 15%' },
+          { key: 'events5', label: '5–6 → 10%' },
+        ]
+      },
+      { key: 'methods',  label: 'Методическая дисциплина: авторские материалы по программам', pct: '10%', type: 'single' },
+      { key: 'decor',    label: 'Оформление школы к праздникам', pct: '10%', type: 'single' },
+      { key: 'parents',  label: 'Работа с родителями при риске ухода (BigBen)', pct: '10%', type: 'single' },
+    ];
+
+    const criteriaRows = criteria.map(c => {
+      if (c.type === 'single') {
+        const checked = p[c.key] ? 'checked' : '';
+        return `<div style="display:flex;align-items:center;gap:10px;padding:8px var(--px);border-bottom:1px solid var(--gray-100)">
+          <input type="checkbox" data-teacher="${teacher}" data-key="${c.key}" ${checked}
+            style="width:16px;height:16px;accent-color:${color};cursor:pointer;flex-shrink:0">
+          <span style="flex:1;font-size:13px">${c.label}</span>
+          <span style="font-size:12px;font-weight:700;color:${color};white-space:nowrap">${c.pct}</span>
+        </div>`;
+      } else {
+        // scale — radio buttons
+        return `<div style="padding:8px var(--px) 4px;border-bottom:1px solid var(--gray-100)">
+          <div style="font-size:13px;margin-bottom:4px;color:var(--gray-600)">${c.label}</div>
+          ${c.options.map(o => `
+            <label style="display:flex;align-items:center;gap:8px;padding:3px 0;cursor:pointer">
+              <input type="radio" name="events_${teacher.replace(/\s/g,'_')}" data-teacher="${teacher}" data-key="${o.key}" data-radio="events"
+                ${p[o.key] ? 'checked' : ''}
+                style="accent-color:${color};cursor:pointer">
+              <span style="font-size:12px">${o.label}</span>
+            </label>`).join('')}
+          <label style="display:flex;align-items:center;gap:8px;padding:3px 0;cursor:pointer">
+            <input type="radio" name="events_${teacher.replace(/\s/g,'_')}" data-teacher="${teacher}" data-key="events_none" data-radio="events"
+              ${!p.events9 && !p.events7 && !p.events5 ? 'checked' : ''}
+              style="accent-color:${color};cursor:pointer">
+            <span style="font-size:12px;color:var(--gray-400)">менее 5 → 0%</span>
+          </label>
+        </div>`;
+      }
+    }).join('');
+
+    return `<div style="border-bottom:2px solid var(--gray-100)">
+      <div style="display:flex;align-items:center;gap:10px;padding:12px var(--px);background:var(--gray-50)">
+        <div style="width:32px;height:32px;border-radius:50%;background:${color};color:#fff;font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center">${TEACHER_INITIALS[teacher]}</div>
+        <div style="flex:1">
+          <div style="font-size:14px;font-weight:600">${teacher}</div>
+          <div style="font-size:11px;color:var(--gray-400)">Фонд: ${fmt(fund)} · Выплата: ${pct}%</div>
+        </div>
+        <div style="text-align:right">
+          <div style="font-size:11px;color:var(--gray-400);text-transform:uppercase;letter-spacing:0.5px">К выплате</div>
+          <div style="font-family:var(--mono);font-size:18px;font-weight:700;color:${color}">${fmt(payout)}</div>
+        </div>
+      </div>
+      ${criteriaRows}
+    </div>`;
+  }).join('');
+
+  document.getElementById('premiumTotal').textContent = fmt(totalPayout);
+
+  // Save state on any change
+  block.querySelectorAll('input[type=checkbox]').forEach(cb => {
+    cb.addEventListener('change', function() {
+      const t = this.dataset.teacher;
+      const k = this.dataset.key;
+      if (!premiumState[t]) premiumState[t] = {};
+      premiumState[t][k] = this.checked;
+      savePremiumState();
+      renderPremiumBlock();
+    });
+  });
+
+  block.querySelectorAll('input[type=radio]').forEach(rb => {
+    rb.addEventListener('change', function() {
+      const t = this.dataset.teacher;
+      const k = this.dataset.key;
+      if (!premiumState[t]) premiumState[t] = {};
+      // clear all event keys first
+      premiumState[t].events9 = false;
+      premiumState[t].events7 = false;
+      premiumState[t].events5 = false;
+      if (k !== 'events_none') premiumState[t][k] = true;
+      savePremiumState();
+      renderPremiumBlock();
+    });
+  });
+}
+let fixedState = Object.assign({}, FIXED_DEFAULTS, JSON.parse(localStorage.getItem('ss_fixed') || '{}'));
+// Договорённость с Натальей (сентябрь 2026): пол администратора 80 000 → 95 000, процент прежний.
+// Пол хранится и в общих настройках, и внутри каждого сохранённого месяца (оттуда подставляется
+// при переключении), поэтому проходим по обоим — и делаем это при КАЖДОМ открытии: одноразовая
+// пометка не спасала, старое значение возвращалось из месяца и снова оседало в настройках.
+// Трогаем только ровно 80 000 (прежний пол по умолчанию) и только с сентября 2026 —
+// прошлый учебный год это история выплат, её править нельзя.
+(function () {
+  if (fixedState.adminMin === 80000) { fixedState.adminMin = 95000; localStorage.setItem('ss_fixed', JSON.stringify(fixedState)); }
+  try {
+    const h = JSON.parse(localStorage.getItem('ss_salary_history') || '{}');
+    let changed = 0;
+    Object.keys(h).forEach(function (m) {
+      if (m >= '2026-09' && h[m] && h[m].fixed && +h[m].fixed.adminMin === 80000) { h[m].fixed.adminMin = 95000; changed++; }
+    });
+    if (changed) localStorage.setItem('ss_salary_history', JSON.stringify(h));
+  } catch (e) {}
+})();
+// у старых сохранённых абонементов нет группы — проставляем по фамилии (скидка вычитается в группе ребёнка)
+(function () {
+  const G = { 'мурзагулов': 'GMF 1A', 'панкова': 'GMF 2B', 'батяновск': 'GMF 2B', 'ботяновск': 'GMF 2B', 'колесникова': 'GMF 2A',
+              'погорелова': 'GMF 3B', 'осиян': 'Prepare 4A', 'елькина': 'Prepare 3A', 'цупрун': 'Get Involved 2A' };
+  // найден по счетам CRM 17.09 (76 500 за 9 мес) — добавить в сохранённый список, если его там нет
+  if (Array.isArray(fixedState.abonements) && !fixedState.abonements.some(e => /юрченко/i.test((e && e.name) || '')))
+    fixedState.abonements.push({ name: 'Юрченко Дмитрий', disc: 1500, from: '2026-09', until: '2027-05', group: 'Gateway B2' });
+  (fixedState.abonements || []).forEach(e => {
+    if (!e || e.group) return;
+    const k = Object.keys(G).find(x => (e.name || '').toLowerCase().indexOf(x) === 0);
+    if (k) e.group = G[k];
+  });
+})();
+let taxState = JSON.parse(localStorage.getItem('ss_taxes') || 'null') || TAX_DEFAULTS.slice();
+let costState = JSON.parse(localStorage.getItem('ss_costs') || 'null') || COST_DEFAULTS.slice();
+function saveTaxState() { localStorage.setItem('ss_taxes', JSON.stringify(taxState)); }
+function saveCostState() { localStorage.setItem('ss_costs', JSON.stringify(costState)); }
+let loanState = JSON.parse(localStorage.getItem('ss_loans') || 'null') || [];
+function saveLoanState() { localStorage.setItem('ss_loans', JSON.stringify(loanState)); }
+
+// Налоги, разовые расходы и кредит — просто сумма за каждый месяц: {taxes:{'2026-08':29093}}
+let monthlyState = JSON.parse(localStorage.getItem('ss_monthly') || 'null');
+if (!monthlyState) {
+  monthlyState = { taxes: {}, costs: {}, loans: {} };
+  // переносим то, что уже было введено списками
+  [['taxes', taxState], ['costs', costState], ['loans', loanState]].forEach(([kind, arr]) => {
+    (arr || []).forEach(t => {
+      const p = (t.d || '').split('.');
+      if (p.length !== 3) return;
+      const key = p[2] + '-' + p[1];
+      monthlyState[kind][key] = (monthlyState[kind][key] || 0) + (+t.s || 0);
+    });
+  });
+  localStorage.setItem('ss_monthly', JSON.stringify(monthlyState));
+}
+function saveMonthlyState() { localStorage.setItem('ss_monthly', JSON.stringify(monthlyState)); }
+
+// --- Фонд Лета: копим в учебные месяцы на июнь-август (кредит, билеты, жизнь) ---
+// Цель по умолчанию 1 800 000 (200к × 9 мес): кредит 510к + билеты 500к + жизнь 600к + запас.
+let summerState = JSON.parse(localStorage.getItem('ss_summer') || 'null') || { target: 1100000, monthly: 122000, saved: {} };
+if (summerState.vacationPct == null) summerState.vacationPct = 5;  // отпускные учителям, % с поступлений
+if (summerState.summerPct   == null) summerState.summerPct   = 8;  // фонд лета без кредита, % с поступлений
+function saveSummerState() { localStorage.setItem('ss_summer', JSON.stringify(summerState)); }
+
+// --- Кредиты: цель — закрыть к дате (по умолчанию 01.06.2027) ---
+let creditsState = JSON.parse(localStorage.getItem('ss_credits') || 'null') || {
+  start: '2026-09',
+  target: '2027-06',
+  list: [
+    { name: 'Кредит наличными', balance: 1432250, rate: 34.9, payment: 67750,  type: 'annuity' },
+    { name: 'Кредитная линия',  balance: 849990,  payment: 107580, type: 'line', commission: 28405 },
+  ],
+};
+if (!creditsState.start) creditsState.start = '2026-09';
+function saveCreditsState() { localStorage.setItem('ss_credits', JSON.stringify(creditsState)); }
+// сколько платёжных месяцев от текущего до целевого (цель = месяц, в начале которого долг закрыт)
+function monthsToTarget() {
+  // число взносов = от месяца первого взноса до целевого месяца.
+  // Первый взнос в сентябре (после планового 25.09), последний в мае = 9.
+  const [sy, sm] = (creditsState.start || '2026-09').split('-').map(Number);
+  const [ty, tm] = creditsState.target.split('-').map(Number);
+  return Math.max(1, (ty * 12 + tm) - (sy * 12 + sm));
+}
+// аннуитетный платёж, чтобы погасить P за n месяцев при годовой ставке rate%
+function annuity(P, ratePct, n) {
+  if (P <= 0) return 0;
+  const r = (ratePct || 0) / 100 / 12;
+  if (r <= 0) return Math.round(P / n);
+  return Math.round(P * r / (1 - Math.pow(1 + r, -n)));
+}
+function editCreditTarget() {
+  const v = prompt('Закрыть кредиты к какому месяцу? (формат ГГГГ-ММ, напр. 2027-06):', creditsState.target);
+  if (v === null) return;
+  if (/^\d{4}-\d{2}$/.test(v.trim())) { creditsState.target = v.trim(); saveCreditsState(); render(); }
+}
+function editCreditStart() {
+  const v = prompt('С какого месяца первый досрочный взнос? (ГГГГ-ММ, напр. 2026-09):', creditsState.start || '2026-09');
+  if (v === null) return;
+  if (/^\d{4}-\d{2}$/.test(v.trim())) { creditsState.start = v.trim(); saveCreditsState(); render(); }
+}
+function editCredit(i, field) {
+  const c = creditsState.list[i];
+  const titles = { balance: 'Остаток долга (₽)', rate: 'Ставка, % годовых', payment: 'Платёж по графику (₽)', commission: 'Комиссия в месяц (₽)' };
+  const v = prompt(c.name + '\n' + titles[field] + ':', c[field]);
+  if (v === null) return;
+  const n = parseFloat(String(v).replace(',', '.').replace(/[^0-9.]/g, ''));
+  if (!isNaN(n) && n >= 0) { c[field] = n; saveCreditsState(); render(); }
+}
+function summerSavedTotal() { return Object.values(summerState.saved || {}).reduce((a, b) => a + (+b || 0), 0); }
+function summerThisMonth() { return (summerState.saved || {})[picker.value] || 0; }
+function editSummerTarget() {
+  const v = prompt('Цель Фонда Лета к июню (₽):', summerState.target || 1800000);
+  if (v === null) return;
+  const n = parseInt(String(v).replace(/[^0-9]/g, ''), 10);
+  if (n > 0) { summerState.target = n; saveSummerState(); render(); }
+}
+function editSummerMonthly() {
+  const v = prompt('Сколько откладывать в месяц (₽):', summerState.monthly || 200000);
+  if (v === null) return;
+  const n = parseInt(String(v).replace(/[^0-9]/g, ''), 10);
+  if (n > 0) { summerState.monthly = n; saveSummerState(); render(); }
+}
+function editPct(field, title) {
+  const v = prompt(title + ' — процент с поступлений, %:', summerState[field]);
+  if (v === null) return;
+  const n = parseFloat(String(v).replace(',', '.').replace(/[^0-9.]/g, ''));
+  if (!isNaN(n) && n >= 0) { summerState[field] = n; saveSummerState(); render(); }
+}
+function editVacationPct() { editPct('vacationPct', 'Отпускные учителям'); }
+function editDepositPct()  { editPct('depositPct', 'Депозит / резерв'); }
+function editSummerPct()   { editPct('summerPct', 'Фонд Лета'); }
+function editSummerSaved() {
+  const [y, m] = picker.value.split('-');
+  const label = monthNames[parseInt(m) - 1] + ' ' + y;
+  const cur = (summerState.saved || {})[picker.value] || '';
+  const v = prompt('Сколько реально отложила в Фонд Лета за ' + label + ' (₽):', cur);
+  if (v === null) return;
+  const n = parseInt(String(v).replace(/[^0-9]/g, ''), 10);
+  summerState.saved = summerState.saved || {};
+  if (!n) delete summerState.saved[picker.value]; else summerState.saved[picker.value] = n;
+  saveSummerState(); render();
+}
+// Отработки за месяц — из вкладки «Отработки» (проведённые слоты), одинаково на всех устройствах.
+// null — данных ещё нет (или месяц до сентября 2026): тогда ручные счётчики.
+function otrCounts(ym) {
+  let all = window.__otrByMonth;
+  if (!all) { try { all = JSON.parse(localStorage.getItem('ss_otr_counts') || 'null'); } catch (e) {} }
+  if (!all || ym < '2026-09') return null;
+  return all[ym] || { o60: 0, o90: 0, pay: 0 };
+}
+// Прочие расходы за месяц — из CRM (раздел «Расходы», вносит Наталья: хоз, типография, реклама).
+// Зарплаты, аренду и налоги она туда НЕ вносит — двойного счёта нет. null — нет данных/до сентября 2026.
+function crmSpent(ym) {
+  if (ym < '2026-09') return null;
+  let sp = null; try { sp = JSON.parse(localStorage.getItem('ss_spent') || 'null'); } catch (e) {}
+  if (!sp) return null;
+  return Math.round(+sp[ym] || 0);
+}
+function monthlyAmount(kind, ym) { return (monthlyState[kind] || {})[ym || picker.value] || 0; }
+
+// ---------- ДАТИРОВАННЫЕ ПЛАТЕЖИ: НАЛОГИ И ПРОЧИЕ РАСХОДЫ ----------
+// Каждый платёж привязан к дате оплаты: в расход месяца идёт то, что в этом месяце платится.
+
+const KIND_TITLE = { taxes: 'Налоги и взносы', costs: 'Прочие расходы школы', loans: 'Выплаты по кредиту' };
+const KIND_IDS = { taxes: ['taxVal', 'taxList'], costs: ['costVal', 'costList'], loans: ['loanVal', 'loanList'] };
+
+function editMonthly(kind) {
+  const [y, m] = picker.value.split('-');
+  const label = monthNames[parseInt(m) - 1] + ' ' + y;
+  const val = prompt(KIND_TITLE[kind] + '\nСумма за ' + label + ' (\u20BD):', monthlyAmount(kind) || '');
+  if (val === null) return;
+  const n = parseFloat(String(val).replace(/\s/g, '').replace(',', '.'));
+  if (isNaN(n) || n < 0) return;
+  monthlyState[kind] = monthlyState[kind] || {};
+  monthlyState[kind][picker.value] = Math.round(n);
+  saveMonthlyState();
+  render();
+}
+
+function renderMonthly(kind) {
+  const ids = KIND_IDS[kind];
+  document.getElementById(ids[0]).textContent = fmt(monthlyAmount(kind));
+  const year = Object.entries(monthlyState[kind] || {})
+    .filter(([k, v]) => k.slice(0, 4) === picker.value.slice(0, 4) && v)
+    .reduce((a, [, v]) => a + v, 0);
+  document.getElementById(ids[1]).textContent = year
+    ? 'за ' + picker.value.slice(0, 4) + ' год всего ' + fmt(year)
+    : 'сумма вводится за каждый месяц отдельно';
+}
+
+function saveFixedState() { localStorage.setItem('ss_fixed', JSON.stringify(fixedState)); }
+
+// ДАННЫЕ ГРУПП (актуальные на 2026-2027)
+const GROUPS = [
+  // Екатерина Курагина
+  { teacher: 'Екатерина Курагина', name: 'GMF 1B',        dur: 60, pupils: 4  },
+  { teacher: 'Екатерина Курагина', name: 'GMF 2A',        dur: 60, pupils: 11 },
+  { teacher: 'Екатерина Курагина', name: 'GMF 3B',        dur: 60, pupils: 10 },
+  { teacher: 'Екатерина Курагина', name: 'Get Involved 1A', dur: 90, pupils: 12 },
+  { teacher: 'Ксения Шиллер', name: 'Get Involved 2A', dur: 90, pupils: 12 },
+  { teacher: 'Екатерина Курагина', name: 'Get Involved 1B', dur: 90, pupils: 4  },
+  { teacher: 'Екатерина Курагина', name: 'Prepare 3A',    dur: 90, pupils: 11 },
+  { teacher: 'Екатерина Курагина', name: 'Gateway B2',    dur: 90, pupils: 8  },
+  { teacher: 'Екатерина Курагина', name: 'GMF 4B',        dur: 60, pupils: 10 },
+  // Ксения Шиллер
+  { teacher: 'Ксения Шиллер', name: 'GMF 1C',         dur: 60, pupils: 0  },
+  { teacher: 'Ксения Шиллер', name: 'GMF 2B',         dur: 60, pupils: 10 },
+  { teacher: 'Ксения Шиллер', name: 'GMF 3A',         dur: 60, pupils: 10 },
+  { teacher: 'Ксения Шиллер', name: 'GMF 3C',         dur: 60, pupils: 10 },
+  { teacher: 'Ксения Шиллер', name: 'GMF 3D',         dur: 60, pupils: 10 },
+  { teacher: 'Ксения Шиллер', name: 'GMF 4A',         dur: 60, pupils: 12 },
+  { teacher: 'Екатерина Курагина', name: 'Get Involved 2B', dur: 90, pupils: 2  },
+  { teacher: 'Ксения Шиллер', name: 'Prepare 4A',     dur: 90, pupils: 11 },
+  { teacher: 'Ксения Шиллер', name: 'Prepare 5A',     dur: 90, pupils: 11 },
+  { teacher: 'Ксения Шиллер', name: 'GMF 2C',         dur: 60, pupils: 0  },
+  { teacher: 'Ксения Шиллер', name: 'GMF 2D',         dur: 60, pupils: 0  },
+  // Оксана Синцова
+  { teacher: 'Оксана Синцова', name: 'Mimi 3',       dur: 60, pupils: 6  },
+  { teacher: 'Оксана Синцова', name: 'GMF 1A',        dur: 60, pupils: 9  },
+  { teacher: 'Оксана Синцова', name: 'Genki 1A',      dur: 60, pupils: 0  },
+  { teacher: 'Оксана Синцова', name: 'Genki 1B',      dur: 60, pupils: 0  },
+];
+
+const TEACHER_COLORS = {
+  'Екатерина Курагина': '#6C3FC5',
+  'Ксения Шиллер':     '#E8740A',
+  'Оксана Синцова':    '#0EA5A0',
+};
+
+const TEACHER_INITIALS = {
+  'Екатерина Курагина': 'ЕК',
+  'Ксения Шиллер':     'КШ',
+  'Оксана Синцова':    'ОС',
+};
+
+// STATE
+let state = JSON.parse(localStorage.getItem('ss_salary_state') || 'null') || {
+  pupils: Object.fromEntries(GROUPS.map((g, i) => [i, g.pupils]))
+};
+// выручка, посчитанная самой CRM (уже со скидками); нет данных — считаем по тарифу
+if (!state.crmRev) state.crmRev = {};
+if (!state.inactive) state.inactive = {};
+// Выручка из CRM ПО МЕСЯЦАМ {'2026-09': {индекс группы: ₽}} и ручное выключение группы
+// в конкретном месяце {'2026-09': {индекс: true}}. Раньше и то и другое было одно на все месяцы.
+if (!state.crmRevM) state.crmRevM = {};
+if (!state.offM) state.offM = {};
+function curYM() { return picker.value; }
+// данные CRM за месяц (null — за этот месяц в CRM начислений нет, считаем прогноз по тарифу)
+function monthCrm(ym) {
+  if (!useCrmRevenue()) return null;
+  const m = state.crmRevM[ym || curYM()];
+  return m && Object.keys(m).length ? m : null;
+}
+// Группа идёт в расчёт месяца: есть данные CRM — только если по ней есть начисления;
+// нет данных CRM (прогноз) — если есть ученики. Плюс ручное выключение на этот месяц.
+function isActive(i, ym) {
+  ym = ym || curYM();
+  if (state.offM[ym] && state.offM[ym][i]) return false;
+  const mr = monthCrm(ym);
+  if (mr) return (+mr[i] || 0) > 0;
+  return (state.pupils[i] || 0) > 0;
+}
+function crmMissing(i, ym) {           // группа с учениками, но без начислений в CRM за месяц
+  const mr = monthCrm(ym);
+  return !!mr && !((+mr[i] || 0) > 0) && (state.pupils[i] || 0) > 0;
+}
+
+function fmt(n) {
+  return n.toLocaleString('ru-RU') + ' ₽';
+}
+
+function statusDot(p) {
+  if (p === 0) return 'status-empty';
+  if (p >= MAX_PUPILS) return 'status-full';
+  if (p >= 10) return 'status-good';
+  return 'status-low';
+}
+
+function calcGroup(i, ym) {
+  const g = GROUPS[i];
+  const p = state.pupils[i] || 0;
+  if (!isActive(i, ym)) return { revenue: 0, fot: 0, hands: 0, deposit: 0 };   // не идёт в месяц — ни выручки, ни депозита
+  const mr = monthCrm(ym);
+  const gross = mr ? (+mr[i] || 0) : p * TARIFF[g.dur];   // CRM за месяц, иначе прогноз по тарифу
+  const noshow = mr ? noShowGroup(i, ym) - transferAdjGroup(i, ym) : 0;   // выбывшие без уроков; переводы — до полного абонемента
+  const early = mr ? earlyGroup(i, ym) : 0;                  // ранняя оплата сентября по старой цене
+  const revenue = Math.max(0, gross - noshow - abonDiscGroup(i, ym) - early);   // минус скидки длинных абонементов и ранней оплаты
+  const fot = Math.round(revenue * TEACHER_PCT);
+  const hands = fot - DEPOSIT;
+  return { revenue, fot, hands: Math.max(0, hands), deposit: DEPOSIT };
+}
+
+// «За какой месяц» из комментария оплаты. Месяц — ОТДЕЛЬНЫМ словом (раньше «ма» ловило «Мария»,
+// «система оплаты» → всё уходило в май). Берём последнее упоминание; год — ближайший к дате платежа.
+const MONTH_RE_C=/(?:^|[^а-яё])(январ|феврал|март|апрел|ма[йяюе](?![а-яё])|июн|июл|август|сентябр|октябр|ноябр|декабр)/g;
+const MONTH_NUM_C={"январ":1,"феврал":2,"март":3,"апрел":4,"июн":6,"июл":7,"август":8,"сентябр":9,"октябр":10,"ноябр":11,"декабр":12};
+function monthKeyFromComment(comment,y,m){
+  let last=null,x; MONTH_RE_C.lastIndex=0;
+  while((x=MONTH_RE_C.exec(comment))) last=x[1];
+  if(!last) return null;
+  const mm=MONTH_NUM_C[last]||5;                     // всё, чего нет в таблице, — это «май/мая/…»
+  let best=null;                                     // при равенстве — вперёд (платят заранее)
+  [y-1,y,y+1].forEach(yy=>{ const d=(yy*12+mm)-(y*12+m); if(best===null||Math.abs(d)<Math.abs(best.d)||(Math.abs(d)===Math.abs(best.d)&&d>0)) best={yy:yy,d:d}; });
+  return best.yy+'-'+String(mm).padStart(2,'0');
+}
+function csvSumByMonth(text){
+  const cash={}, paidFor={};
+  const lines=text.split('\n');
+  for(let i=1;i<lines.length;i++){
+    const line=lines[i]; if(!line) continue;
+    const p=line.split(';'); if(p.length<5) continue;
+    const date=p[0].replace(/["]/g,'').trim();
+    const m=date.match(/^(\d{2})\.(\d{2})\.(\d{4})/); if(!m) continue;
+    const sum=parseFloat(p[4].replace(/["\s]/g,'').replace(',','.')); if(isNaN(sum)) continue;
+    cash[m[3]+'-'+m[2]]=(cash[m[3]+'-'+m[2]]||0)+sum;
+    const comment=p.slice(5).join(';').toLowerCase();
+    const k=monthKeyFromComment(comment,+m[3],+m[2]); if(k) paidFor[k]=(paidFor[k]||0)+sum;
+  }
+  return {cash, paidFor};
+}
+async function loadFinanceCsv(files){
+  let cashLoaded=false, spentLoaded=false, msg=[];
+  for(const f of files){
+    const buf=await f.arrayBuffer();
+    let text; try{ text=new TextDecoder('windows-1251').decode(buf); }catch(e){ text=new TextDecoder().decode(buf); }
+    const isIncome=/income|доход/i.test(f.name) || /Оплата обучения/i.test(text.slice(0,500));
+    const sums=csvSumByMonth(text);
+    if(isIncome){ localStorage.setItem('ss_cash',JSON.stringify(sums.cash)); localStorage.setItem('ss_paidfor',JSON.stringify(sums.paidFor)); cashLoaded=true; msg.push('доходы: '+Object.keys(sums.cash).length+' мес'); }
+    else { localStorage.setItem('ss_spent',JSON.stringify(sums.cash)); spentLoaded=true; msg.push('расходы: '+Object.keys(sums.cash).length+' мес'); }
+  }
+  renderFinance();
+  alert('Загружено — '+msg.join(', ')+'. Смотри карточки «Реально пришло» и «Расходы факт».');
+}
+
+// ===== ОПЛАТЫ ПО СЧЕТАМ (закладка «BigBen → оплаты») =====
+// Счёт: [группа, uid, оплачено с, оплачено до, сумма, статус p/u/o, дата оплаты]. Месяц счёта — на который
+// приходится бОльшая часть периода «с—по»; длинный абонемент (период > 45 дней) делится поровну по месяцам.
+// «Перенос»/«ручная корректировка» (статус o) — не новые деньги, не считаем.
+const MON_RU_S = {'янв':1,'фев':2,'мар':3,'апр':4,'мая':5,'май':5,'июн':6,'июл':7,'авг':8,'сен':9,'окт':10,'ноя':11,'дек':12};
+function ruDate(s) {
+  const m = String(s || '').match(/(\d{1,2})\s+([а-яё]{3})[а-яё]*\s+(\d{4})/i);
+  if (m && MON_RU_S[m[2].toLowerCase()]) return new Date(Date.UTC(+m[3], MON_RU_S[m[2].toLowerCase()] - 1, +m[1]));
+  const n = String(s || '').match(/(\d{2})[.\-](\d{2})[.\-](\d{4})/);
+  return n ? new Date(Date.UTC(+n[3], +n[2] - 1, +n[1])) : null;
+}
+function ymOf(d) { return d.getUTCFullYear() + '-' + String(d.getUTCMonth() + 1).padStart(2, '0'); }
+function invMonths(from, to) {
+  const a = ruDate(from), b = ruDate(to);
+  if (!a || !b) return [];
+  if (b <= a) return [ymOf(a)];
+  if ((b - a) / 864e5 <= 70) {                       // обычный счёт (в т.ч. на 1,5 месяца по урокам)
+    const cnt = {};
+    for (let t = a.getTime(); t < b.getTime(); t += 864e5) { const k = ymOf(new Date(t)); cnt[k] = (cnt[k] || 0) + 1; }
+    return [Object.entries(cnt).sort((x, y) => y[1] - x[1])[0][0]];
+  }
+  const s = new Date(a.getTime() + 15 * 864e5), e = new Date(b.getTime() - 15 * 864e5), out = [];
+  let y = s.getUTCFullYear(), m = s.getUTCMonth();
+  while (y * 12 + m <= e.getUTCFullYear() * 12 + e.getUTCMonth()) { out.push(y + '-' + String(m + 1).padStart(2, '0')); m++; if (m > 11) { m = 0; y++; } }
+  return out;
+}
+function payByMonth() {
+  let d = null; try { d = JSON.parse(localStorage.getItem('ss_pay') || 'null'); } catch (e) {}
+  if (!d || !Array.isArray(d.inv)) return null;
+  const paid = {}, unpaid = {}, unpaidN = {}, refunds = {};
+  const shortPaid = {}, longPaid = {}, shortN = {};   // помесячные счета и доли длинных абонементов
+  const ways = {};                                    // способ оплаты (из CRM) по месяцам
+  d.inv.forEach(x => {
+    const months = invMonths(x[2], x[3]); if (!months.length) return;
+    const part = (+x[4] || 0) / months.length;
+    const isLong = months.length > 1;
+    months.forEach(k => {
+      if (x[5] === 'p') {
+        paid[k] = (paid[k] || 0) + part;
+        if (isLong) longPaid[k] = (longPaid[k] || 0) + part;
+        else { shortPaid[k] = (shortPaid[k] || 0) + part; shortN[k] = (shortN[k] || 0) + 1; }
+        const w = (x[7] || '').trim();
+        if (w) { (ways[k] = ways[k] || {})[w] = (ways[k][w] || 0) + part; }
+      } else if (x[5] === 'u') { unpaid[k] = (unpaid[k] || 0) + part; unpaidN[k] = (unpaidN[k] || 0) + 1; }
+    });
+  });
+  (d.ref || []).forEach(r => { const t = ruDate(r[3]); if (t) { const k = ymOf(t); refunds[k] = (refunds[k] || 0) + (+r[2] || 0); } });
+  return { at: d.at, paid, unpaid, unpaidN, refunds, shortPaid, longPaid, shortN, ways };
+}
+function paidNet(pb, ym) { return Math.round((pb.paid[ym] || 0) - (pb.refunds[ym] || 0)); }
+async function fetchPayData() {
+  const token = localStorage.getItem('bbToken') || ''; if (!token || window.__payFromHash) return;
+  try {
+    const r = await fetch('https://ss-bb.o-sintsova.workers.dev/pay-data?t=' + encodeURIComponent(token), { cache: 'no-store' });
+    const d = await r.json();
+    if (d && d.ok && d.data && Array.isArray(d.data.inv)) { localStorage.setItem('ss_pay', JSON.stringify(d.data)); render(); }
+  } catch (e) {}
+}
+const MONTH_GEN = ['января','февраля','марта','апреля','мая','июня','июля','августа','сентября','октября','ноября','декабря'];
+// ЗП за месяц X платится до 5-го числа X+1 из оплат ЗА X+1; ЗП за май — из оплат за сентябрь (вносят до 10.06).
+function renderCash(t) {
+  const card = document.getElementById('cashCard'); if (!card) return;
+  const pb = payByMonth(); if (!pb) { card.style.display = 'none'; return; }
+  const ym = picker.value, [y, m] = ym.split('-').map(Number);
+  const nextY = m === 12 ? y + 1 : y, nextM = m === 12 ? 1 : m + 1;
+  const src = m === 5 ? y + '-09' : nextY + '-' + String(nextM).padStart(2, '0');
+  const srcName = monthNames[+src.slice(5) - 1] + ' ' + src.slice(0, 4);
+  const came = paidNet(pb, src), notYet = Math.round(pb.unpaid[src] || 0), notYetN = pb.unpaidN[src] || 0;
+  // ожидается за месяц-источник = начислено по абонементам (если CRM уже отдала этот месяц)
+  const expected = monthCrm(src) ? GROUPS.reduce((a, g, i) => a + (isActive(i, src) ? calcGroup(i, src).revenue : 0), 0) : null;
+  const salaries = t.hands + t.admin + t.otr;
+  const other = t.fixed - t.admin - t.otr - t.deposit;
+  const row = (label, sub, val, color) => '<div style="display:flex;justify-content:space-between;gap:10px;padding:10px var(--px);border-bottom:1px solid var(--gray-100);flex-wrap:wrap">'
+    + '<div style="min-width:180px"><div style="font-size:13px;font-weight:600;color:var(--gray-900)">' + label + '</div>' + (sub ? '<div style="font-size:11px;color:var(--gray-400)">' + sub + '</div>' : '') + '</div>'
+    + '<div style="font-family:var(--mono);font-size:15px;font-weight:700;color:' + (color || 'var(--gray-900)') + '">' + val + '</div></div>';
+  let html = '';
+  if (m >= 6 && m <= 8) {
+    html = row('Летом зарплат нет', 'ЗП за май выплачивается в начале июня из оплат за сентябрь', '—');
+  } else {
+    if (expected != null) html += row('Ожидается за ' + srcName, 'начислено по абонементам — столько должно прийти', fmt(expected));
+    html += row('Уже пришло за ' + srcName, (expected ? Math.round(came / expected * 100) + '% от ожидаемого · ' : '') + 'оплаченные счета' + (notYet ? ' · выставлено и не оплачено ' + fmt(notYet) + ' (' + notYetN + ' сч.)' : ''), fmt(came), 'var(--green)');
+    html += row('ЗП за ' + monthNames[m - 1] + ' — выплатить до 5 ' + MONTH_GEN[nextM - 1], 'педагоги на руки ' + fmt(t.hands) + ' · администратор ' + fmt(t.admin) + ' · отработки ' + fmt(t.otr), '−' + fmt(salaries), 'var(--red)');
+    const base = expected != null ? expected : came;
+    const left1 = base - salaries;
+    html += row('Остаётся после ЗП', (expected != null ? 'если оплатят всё ожидаемое · по уже пришедшему: ' + fmt(came - salaries) : (left1 >= 0 ? 'на зарплаты хватает' : 'на зарплаты не хватает')), fmt(left1), left1 >= 0 ? 'var(--green)' : 'var(--red)');
+    html += row('Прочие выплаты месяца', 'аренда, уборка, SMM, налоги, расходы, кредиты (депозит остаётся в школе)', '−' + fmt(other), 'var(--red)');
+    const left2 = left1 - other;
+    html += row('Остаётся после всех выплат', (m === 5 ? 'ЗП за май — из оплат за сентябрь (до 10.06 по договору) · ' : '') + (expected != null ? 'если оплатят всё ожидаемое · по уже пришедшему: ' + fmt(came - salaries - other) : ''), fmt(left2), left2 >= 0 ? 'var(--green)' : 'var(--red)');
+  }
+  document.getElementById('cashBody').innerHTML = html;
+  const at = pb.at ? new Date(pb.at).toLocaleString('ru-RU', { day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' }) : '';
+  document.getElementById('cashSub').textContent = 'ЗП за месяц платится до 5-го из оплат за следующий месяц · счета из CRM' + (at ? ' на ' + at : '');
+  card.style.display = '';
+}
+
+async function fetchFinanceData(){
+  const token=localStorage.getItem('bbToken')||''; if(!token) return;
+  try{
+    const r=await fetch('https://ss-bb.o-sintsova.workers.dev/finance-data?t='+encodeURIComponent(token),{cache:'no-store'});
+    const d=await r.json();
+    if(d && d.ok){
+      if(d.cash) localStorage.setItem('ss_cash',JSON.stringify(d.cash));
+      if(d.spent) localStorage.setItem('ss_spent',JSON.stringify(d.spent));
+      if(d.paidFor) localStorage.setItem('ss_paidfor',JSON.stringify(d.paidFor));
+      if(d.debtByMonth) localStorage.setItem('ss_debt',JSON.stringify(d.debtByMonth));
+      if(d.debtTotal!=null) localStorage.setItem('ss_debt_total',String(d.debtTotal));
+      if(d.debtCount!=null) localStorage.setItem('ss_debt_count',String(d.debtCount));
+      if(d.at) localStorage.setItem('ss_finance_at',d.at);
+      render();   // расходы из CRM входят в фиксированные выплаты — пересчитать всё
+    }
+  }catch(e){}
+}
+
+// Авто-подстановка счётчиков «Отработки онлайн» из реальных проведённых отработок за выбранный месяц
+// (число 60-мин и 90-мин слотов). Убирает ручной ввод — как просила Оксана.
+function applyOtrAuto(){ /* счётчики теперь берутся прямо в render() через otrCounts() */ }
+
+// ЭКОНОМИЯ НА ОТРАБОТКАХ vs перерасчёт. Данные — из воркера (/otr-data, payLessons с полем closed).
+// Перерасчёт: 1000 ₽/урок (60 мин), 1250 ₽/урок (90 мин: Get Involved/Prepare/Gateway).
+// Экономия = закрыто_уроков×перерасчёт − оплата Инге (1500/2250 за сеанс). Видит только владелец.
+async function fetchOtrSavings(){
+  const token=localStorage.getItem('bbToken')||''; if(!token) return;
+  const card=document.getElementById('otrSavingsCard'); if(!card) return;
+  try{
+    const r=await fetch('https://ss-bb.o-sintsova.workers.dev/otr-data?t='+encodeURIComponent(token),{cache:'no-store'});
+    const d=await r.json();
+    if(!d || !d.ok || !Array.isArray(d.payLessons)) return;
+    const OTR90={GI1:1,GI2:1,P3:1,P4:1,P5:1,GW:1};
+    const perLesson=function(lk){return OTR90[lk]?1250:1000;};
+    // Инге платим 25 ₽ за минуту фактического урока (время из расписания CRM)
+    const rate=function(p){return (p.pay!=null)?p.pay:Math.round((p.mins||(OTR90[p.lk]?90:60))*25);};
+    const MONTHS=['январь','февраль','март','апрель','май','июнь','июль','август','сентябрь','октябрь','ноябрь','декабрь'];
+    const byM={}; let gRefund=0,gInga=0,gClosed=0,gSlots=0;
+    const byMonthCnt={};                       // ym -> {o60, o90} — число проведённых отработок по длительности
+    d.payLessons.forEach(function(p){
+      if(!p.conducted) return;
+      const ym=(p.date||'').slice(0,7);
+      const cc=byMonthCnt[ym]||(byMonthCnt[ym]={o60:0,o90:0,pay:0});
+      if(OTR90[p.lk]) cc.o90++; else cc.o60++;
+      cc.pay+=rate(p);                         // оплата Инге — по фактическим минутам
+      const closed=(p.closed!=null)?p.closed:0;
+      const refund=closed*perLesson(p.lk), inga=rate(p);
+      const m=byM[ym]||(byM[ym]={refund:0,inga:0,closed:0,slots:0});
+      m.refund+=refund; m.inga+=inga; m.closed+=closed; m.slots++;
+      gRefund+=refund; gInga+=inga; gClosed+=closed; gSlots++;
+    });
+    window.__otrByMonth = byMonthCnt;           // для авто-подстановки счётчиков «Отработки онлайн»
+    try { localStorage.setItem('ss_otr_counts', JSON.stringify(byMonthCnt)); } catch (e) {}
+    render();
+    if(gSlots===0 || gClosed===0){ card.style.display='none'; return; }  // ждём, пока сборщик посчитает closed
+    document.getElementById('otrSaveTotal').textContent=fmt(gRefund-gInga);
+    const months=Object.keys(byM).sort().reverse();
+    let html='';
+    months.forEach(function(ym){
+      const m=byM[ym], save=m.refund-m.inga;
+      const name=MONTHS[+ym.slice(5,7)-1]+' '+ym.slice(0,4);
+      html+='<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:11px var(--px);border-bottom:1px solid var(--gray-100);flex-wrap:wrap">'
+        +'<div style="min-width:150px"><div style="font-size:13px;font-weight:600;color:var(--gray-900);text-transform:capitalize">'+name+'</div>'
+        +'<div style="font-size:11px;color:var(--gray-400)">'+m.slots+' отработок · закрыто '+m.closed+' уроков · перерасчёт был бы '+fmt(m.refund)+', Инге '+fmt(m.inga)+'</div></div>'
+        +'<div style="font-family:var(--mono);font-size:16px;font-weight:700;color:var(--green)">+'+fmt(save)+'</div></div>';
+    });
+    document.getElementById('otrSaveBody').innerHTML=html;
+    card.style.display='';
+  }catch(e){}
+}
+
+function renderFamilyLink(){
+  const fc=(localStorage.getItem('ss_family_code')||'').trim();
+  const on=localStorage.getItem('ss_send_school')==='1';
+  const fam=document.getElementById('familyLink');
+  if(!fam) return;
+  fam.innerHTML = on
+    ? '☁️ «Свободно на руки» уходит в «Бюджет семьи» (код <b>'+esc(fc)+'</b>) <span id="famNote" style="color:var(--green)"></span> <button onclick="unlinkSchool()" style="font-size:10px;border:1px solid var(--gray-200);background:none;border-radius:10px;padding:1px 7px;cursor:pointer;color:var(--gray-400)">выключить</button>'
+    : '☁️ «Свободно на руки»: сейчас вводишь в приложении «Бюджет семьи» вручную. <button onclick="setFamilyCode()" style="font-size:12px;border:1.5px solid var(--purple);background:none;border-radius:10px;padding:4px 10px;cursor:pointer;color:var(--purple);font-weight:700">Включить автоотправку</button>';
+}
+
+function renderFinance() {
+  renderFamilyLink();
+  let paid={}, spent={};
+  try { paid=JSON.parse(localStorage.getItem('ss_paidfor')||'{}'); } catch(e){}
+  try { spent=JSON.parse(localStorage.getItem('ss_spent')||'{}'); } catch(e){}
+  const ym = picker.value;
+  const p = paid[ym], sp = spent[ym];
+  const rev = (lastTotals && lastTotals.revenue) || 0;
+  const pb=payByMonth();
+  const pNet = pb ? paidNet(pb, ym) : null;
+  const pe=document.getElementById('paidReal'); if(pe){ pe.textContent = pb ? fmt(pNet) : (p!=null?fmt(Math.round(p)):'—'); }
+  const se=document.getElementById('spentReal'); if(se){ se.textContent = sp!=null?fmt(Math.round(sp)):'—'; }
+  const de=document.getElementById('debtReal'), ds=document.getElementById('debtSub');
+  let debtMap={}; try{ debtMap=JSON.parse(localStorage.getItem('ss_debt')||'{}'); }catch(e){}
+  const debtTotal=localStorage.getItem('ss_debt_total');
+  const debtCount=localStorage.getItem('ss_debt_count');
+  if(de){
+    const dm = debtMap[ym];
+    // Главная цифра — долг ЗА ВЫБРАННЫЙ МЕСЯЦ, общий по школе уходит в подпись:
+    // иначе в сентябре видна полуторамиллионная сумма, в которой почти весь долг — октябрьский.
+    if(dm!=null){
+      de.textContent = fmt(Math.round(dm));
+      de.style.color = dm>0 ? 'var(--red,#c00)' : 'var(--green)';
+      if(ds) ds.textContent = (dm>0 ? 'за '+monthNameOf(ym) : 'за месяц оплатили все 🎉')
+        + (debtTotal ? ' · всего по школе '+fmt(+debtTotal)+(debtCount?' ('+debtCount+' должников)':'') : '');
+    } else if(debtTotal!=null){
+      de.textContent = fmt(+debtTotal);
+      de.style.color = +debtTotal>0 ? 'var(--red,#c00)' : 'var(--green)';
+      if(ds) ds.textContent = 'всего по школе' + (debtCount?' · '+debtCount+' должников':'');
+    } else if(false){
+      de.textContent = fmt(+debtTotal);
+      de.style.color = +debtTotal>0 ? 'var(--red,#c00)' : 'var(--green)';
+      if(ds) ds.textContent = (debtCount?debtCount+' должников по школе':'всего по школе');
+    } else { de.textContent='—'; if(ds) ds.textContent='обнови данные'; }
+  }
+  // живые деньги месяца отдельно от долей годовых абонементов, оплаченных весной
+  const psp=document.getElementById('paidSplit');
+  if(psp){
+    if(pb){
+      const sh=Math.round(pb.shortPaid[ym]||0), lg=Math.round(pb.longPaid[ym]||0), n=pb.shortN[ym]||0;
+      const word = (n % 10 === 1 && n % 100 !== 11) ? 'счёт' : ((n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 10 || n % 100 >= 20)) ? 'счёта' : 'счетов');
+      psp.textContent = 'помесячными ' + fmt(sh) + ' (' + n + ' ' + word + ')' + (lg ? ' · абонементы ' + fmt(lg) : '');
+    } else psp.textContent='';
+  }
+  // чем платили: способ берётся из CRM (колонка «Способ оплаты» в счёте)
+  const pw=document.getElementById('paidWays');
+  if(pw){
+    const w = (pb && pb.ways && pb.ways[ym]) || null;
+    if(w && Object.keys(w).length){
+      pw.textContent = Object.entries(w).sort((a,b)=>b[1]-a[1])
+        .map(function(e){ return e[0].toLowerCase()+' '+fmt(Math.round(e[1])); }).join(' · ');
+    } else if(pb){
+      pw.textContent = 'способы оплаты: обнови закладку «💳 BigBen → оплаты» и нажми её в CRM';
+    } else pw.textContent='';
+  }
+  const ps=document.getElementById('paidSub');
+  if(ps && pb && rev) ps.textContent = Math.round(pNet/rev*100)+'% от начисленного · по счетам' + (pb.unpaid[ym] ? ' · не оплачено ' + fmt(Math.round(pb.unpaid[ym])) : '');
+  else if(ps && p!=null && rev) ps.textContent = Math.round(p/rev*100)+'% от начисленного';
+}
+
+function render() {
+  const teachers = [...new Set(GROUPS.map(g => g.teacher))];
+
+  // Calc totals
+  let totalRevenue = 0, totalFot = 0, totalHands = 0, totalDeposit = 0, totalPupils = 0;
+  let totalPotential = 0;
+
+  GROUPS.forEach((g, i) => {
+    if (!isActive(i)) return;   // группа не идёт в этом месяце — не считаем
+    const c = calcGroup(i);
+    totalRevenue += c.revenue;
+    totalFot += c.fot;
+    totalHands += c.hands;
+    totalDeposit += c.deposit;
+    totalPupils += (state.pupils[i] || 0);
+    totalPotential += MAX_PUPILS * TARIFF[g.dur];
+  });
+
+  // база администратора = выручка + возврат абонементных скидок (активных в выбранном месяце)
+  const adminBase = totalRevenue + adminAbonback();
+  const adminPct = Math.round(adminBase * ADMIN_PCT);
+  const adminPay = Math.max(adminPct, fixedState.adminMin);
+  const otrAuto = otrCounts(picker.value);
+  if (otrAuto) { fixedState.otrabotki60 = otrAuto.o60; fixedState.otrabotki90 = otrAuto.o90; }
+  // авто: сумма по фактической длительности (25 ₽/мин); вручную: старые ставки 1500/2250
+  const otrabotkiPay = (otrAuto && otrAuto.pay != null)
+    ? otrAuto.pay
+    : (fixedState.otrabotki60 || 0) * 1500 + (fixedState.otrabotki90 || 0) * 2250;
+  const taxPay = monthlyAmount('taxes');
+  const costCrm = crmSpent(picker.value);
+  const costPay = costCrm !== null ? costCrm : monthlyAmount('costs');
+  // Кредиты: платёж = целевой аннуитет, чтобы закрыть к дате
+  const creditN = monthsToTarget();
+  const creditRows = creditsState.list.map(function (c) {
+    if (c.noEarly) {
+      // досрочно погасить нельзя — платим строго по графику
+      return { c: c, target: c.payment, extra: 0, locked: true };
+    }
+    let need;
+    if (c.type === 'line') {
+      need = Math.round(c.balance / creditN) + (c.commission || 0);
+    } else {
+      need = annuity(c.balance, c.rate, creditN);
+    }
+    const target = Math.max(need, c.payment);
+    return { c: c, target: target, extra: target - c.payment };
+  });
+  const loanPay = creditRows.reduce(function (a, r) { return a + r.target; }, 0);
+
+  // строки блока «Кредиты»
+  document.getElementById('creditRows').innerHTML = creditRows.map(function (r, i) {
+    return '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:11px var(--px);border-bottom:1px solid #f3c9c9;flex-wrap:wrap">'
+      + '<div style="min-width:170px"><div style="font-size:13px;font-weight:600;color:var(--gray-900)">' + r.c.name + '</div>'
+      + '<div style="font-size:11px;color:var(--gray-400)">'
+      + 'остаток <button onclick="editCredit(' + i + ',\'balance\')" style="border:none;background:none;color:var(--purple);cursor:pointer;font-family:var(--mono);padding:0">' + fmt(r.c.balance) + '</button>'
+      + ' · ' + (r.c.type === 'line'
+          ? 'комиссия <button onclick="editCredit(' + i + ',\'commission\')" style="border:none;background:none;color:var(--purple);cursor:pointer;font-family:var(--mono);padding:0">' + fmt(r.c.commission) + '/мес</button>'
+          : '<button onclick="editCredit(' + i + ',\'rate\')" style="border:none;background:none;color:var(--purple);cursor:pointer;padding:0">' + r.c.rate + '%</button>')
+      + ' · график <button onclick="editCredit(' + i + ',\'payment\')" style="border:none;background:none;color:var(--gray-500);cursor:pointer;font-family:var(--mono);padding:0">' + fmt(r.c.payment) + '</button></div></div>'
+      + '<div style="text-align:right"><div style="font-family:var(--mono);font-size:15px;font-weight:700;color:' + (r.extra > 0 ? 'var(--red)' : 'var(--gray-500)') + '">' + fmt(r.target) + '/мес</div>'
+      + '<div style="font-size:11px;color:var(--gray-400)">' + (r.locked ? 'по графику · досрочно нельзя' : (r.extra > 0 ? '+' + fmt(r.extra) + ' сверх графика' : 'закроется по графику к сроку')) + '</div></div></div>';
+  }).join('');
+  const creditExtra = creditRows.reduce(function (a, r) { return a + r.extra; }, 0);
+  const tgtParts = creditsState.target.split('-');
+  document.getElementById('creditTotalLabel').textContent = 'Итого на кредиты, чтобы закрыть к ' + tgtParts[1] + '.' + tgtParts[0];
+  document.getElementById('creditTotal').textContent = fmt(loanPay) + '/мес';
+  const creditGraph = creditsState.list.reduce(function (a, c) { return a + c.payment; }, 0);
+  const stParts = (creditsState.start || '2026-09').split('-');
+  document.getElementById('creditNote').textContent =
+    creditN + ' взносов начиная с ' + stParts[1] + '.' + stParts[0] +
+    '. По графику ' + fmt(creditGraph) + '/мес, сверх графика +' + fmt(creditExtra) + '/мес. С ' + tgtParts[1] + '.' + tgtParts[0] + ' кредитов нет — освобождается ' + fmt(creditGraph) + '/мес навсегда.';
+  const fixedTotal = adminPay + fixedState.cleaning + fixedState.smm + fixedState.rent + otrabotkiPay + taxPay + costPay + loanPay + totalDeposit;
+  const totalAllPay = totalHands + fixedTotal;
+
+  // Summary cards
+  document.getElementById('totalRevenue').textContent = fmt(totalRevenue);
+  const crmNow = monthCrm(picker.value);
+  document.getElementById('totalPupils').textContent = totalPupils + ' учеников в ' + GROUPS.filter((g, i) => isActive(i)).length + ' группах'
+    + (crmNow ? ((state.crmOldM || {})[picker.value] ? ' · ⚠️ по урокам — обнови закладку «BigBen → калькулятор»' : ' · из CRM, по абонементам') : ' · ⚠️ прогноз по тарифу: в CRM нет начислений за месяц')
+    + (crmNow && noShowMonth().length ? ' · не считаем ' + noShowMonth().length + ' выбывших без уроков (−' + fmt(noShowMonth().reduce((a, e) => a + e.sum, 0)) + ')' : '');
+  document.getElementById('totalFot').textContent = fmt(totalFot);
+  document.getElementById('totalHandsPay').textContent = 'На руки: ' + fmt(totalHands);
+  const activeGroups = GROUPS.filter((g, i) => isActive(i)).length;
+  document.getElementById('totalDeposit').textContent = fmt(totalDeposit);
+  document.getElementById('depositYearly').textContent = activeGroups + ' активных групп · за 9 мес: ' + fmt(totalDeposit * 9);
+  document.getElementById('adminPay').textContent = fmt(adminPay);
+  document.getElementById('adminNote').textContent = '5% от ' + fmt(adminBase)
+    + (adminBase !== totalRevenue ? ' (выручка + скидки абонементов' + (monthCrm(picker.value) && earlyMonth() ? ' и ранней оплаты' : '') + ' ' + fmt(adminBase - totalRevenue) + ')' : '')
+    + ' = ' + fmt(adminPct) + (adminPct < fixedState.adminMin ? ' → минимум' : '');
+  // Порог: с какой выручки процент обгоняет пол. Считаем в детях по 8 000 — самый осторожный счёт.
+  const gapEl = document.getElementById('adminGap');
+  if (gapEl) {
+    if (adminPct < fixedState.adminMin) {
+      const needRub = Math.round(fixedState.adminMin / ADMIN_PCT - adminBase);
+      gapEl.textContent = 'до процента не хватает ' + fmt(needRub) + ' выручки ≈ ' + Math.ceil(needRub / 8000) + ' детей';
+    } else {
+      gapEl.textContent = 'процент выше минимума на ' + fmt(adminPct - fixedState.adminMin);
+    }
+  }
+  const profit = totalRevenue - totalAllPay;
+  // Зарплата Оксаны — тоже её деньги, поэтому в «остатке» она возвращается обратно
+  const ownerName = 'Оксана Синцова';
+  let ownerHands = 0, ownerDeposit = 0;
+  GROUPS.forEach((g, i) => {
+    if (g.teacher !== ownerName || !isActive(i)) return;   // только группы, что идут в выручку месяца
+    const c = calcGroup(i);
+    ownerHands += c.hands;
+    ownerDeposit += c.deposit;
+  });
+  const remainder = profit + ownerHands;
+  lastTotals = {
+    pupils: totalPupils, revenue: totalRevenue, fot: totalFot, hands: totalHands,
+    deposit: totalDeposit, admin: adminPay, taxes: taxPay, costs: costPay, loans: loanPay,
+    fixed: fixedTotal, all: totalAllPay, profit: profit,
+    ownerHands: ownerHands, mine: remainder,
+  };
+  document.getElementById('totalAllPay').textContent = fmt(totalAllPay);
+  document.getElementById('totalAllSub').textContent = 'Педагоги ' + fmt(totalHands + totalDeposit) + ' (вкл. отпускные) + фикс. ' + fmt(fixedTotal - totalDeposit);
+  document.getElementById('totalRemainder').textContent = fmt(remainder);
+  document.getElementById('totalRemainder').style.color = remainder >= 0 ? 'var(--green)' : 'var(--red)';
+  document.getElementById('remainderSub').textContent = remainder >= 0
+    ? 'Прибыль ' + fmt(profit) + ' + моя ЗП ' + fmt(ownerHands)
+    : 'Дефицит';
+  // ===== КОПИЛКА ЛЕТА: процент с поступлений + минимум =====
+  const sumPct = summerState.summerPct;
+  const sumMin = Math.round((summerState.target || 0) / monthsToTarget()); // лето: цель ÷ месяцы до срока
+  const sumPlan = Math.round(totalRevenue * sumPct / 100);
+  const sumActual = Math.max(sumPlan, sumMin);
+
+  const kop = [
+    { icon: '☀️', name: 'Фонд Лета', pct: sumPct, plan: sumPlan, min: sumMin, editFn: 'editSummerPct', minNote: 'цель ÷ ' + monthsToTarget() + ' мес', hard: true },
+  ];
+  document.getElementById('kopilkiRows').innerHTML = kop.map(function (k) {
+    const diff = k.plan - k.min;
+    const status = k.min <= 0 ? '<span style="color:var(--gray-400)">без минимума</span>'
+      : diff >= 0 ? '<span style="color:var(--green)">✓ хватает, сверху +' + fmt(diff) + '</span>'
+                  : '<span style="color:var(--red)">⚠️ мало, доложи ' + fmt(-diff) + '</span>';
+    return '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:11px var(--px);border-bottom:1px solid var(--gray-100);flex-wrap:wrap">'
+      + '<div style="min-width:160px"><div style="font-size:13px;font-weight:600;color:var(--gray-900)">' + k.icon + ' ' + k.name + '</div>'
+      + '<div style="font-size:11px;color:var(--gray-400)">минимум ' + fmt(k.min) + ' · ' + k.minNote + '</div></div>'
+      + '<div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">'
+      + '<button onclick="' + k.editFn + '()" style="font-family:var(--mono);font-size:14px;font-weight:700;color:var(--purple);border:1px solid var(--gray-200);background:#fff;border-radius:10px;padding:3px 10px;cursor:pointer">' + k.pct + '% ✏️</button>'
+      + '<div style="font-family:var(--mono);font-size:15px;font-weight:700;color:var(--gray-900);min-width:100px;text-align:right">' + fmt(k.plan) + '</div>'
+      + '<div style="font-size:12px;min-width:150px;text-align:right">' + status + '</div></div></div>';
+  }).join('');
+  document.getElementById('kopilkiTotal').textContent = fmt(sumPlan) + '  ·  ' + sumPct + '% с поступлений';
+
+  // карточка → «Кредиты / мес» (целевой платёж, чтобы закрыть к дате)
+  document.getElementById('reserveLabel').textContent = '🏦 Кредиты / мес';
+  document.getElementById('reserveAmt').textContent = fmt(loanPay);
+  document.getElementById('reserveAmt').style.color = 'var(--red)';
+  const tgt = creditsState.target.split('-');
+  document.getElementById('reserveSub').textContent = 'чтобы закрыть к ' + tgt[2 - 1] + '.' + tgt[0] + ' · за ' + creditN + ' мес';
+
+  // --- Фонд Лета (годовой трекер) ---
+  const summerPlan = sumPlan;
+  const summerSaved = summerSavedTotal();
+  const summerLeft = Math.max(0, (summerState.target || 0) - summerSaved);
+  document.getElementById('summerMonthlyCard').textContent = fmt(summerPlan);
+  document.getElementById('summerCardSub').textContent = sumPct + '% с поступлений';
+  document.getElementById('summerTarget').textContent = fmt(summerState.target || 0);
+  document.getElementById('summerSaved').textContent = fmt(summerSaved);
+  document.getElementById('summerLeft').textContent = fmt(summerLeft);
+  document.getElementById('summerThisMonth').textContent = fmt(summerThisMonth());
+  // сколько уже отложено месяцев и идём ли по графику: цель за 9 учебных месяцев
+  const paidMonths = Object.values(summerState.saved || {}).filter((v) => +v > 0).length;
+  const onTrackNeed = Math.round((summerState.target || 0) / 9 * Math.max(1, paidMonths));
+  const st = document.getElementById('summerStatus');
+  if (summerSaved >= (summerState.target || 0) && summerState.target > 0) {
+    st.textContent = '✅ Цель на лето собрана — ' + fmt(summerSaved) + '. Дальше лишнее уходит в депозит.';
+    st.style.color = 'var(--green)';
+  } else if (paidMonths === 0) {
+    st.textContent = 'Плановый взнос ' + fmt(summerPlan) + '/мес × 9 = ' + fmt(summerPlan * 9) + '. Отмечай кнопкой ✏️, сколько отложила за месяц.';
+    st.style.color = 'var(--gray-500)';
+  } else if (summerSaved >= onTrackNeed) {
+    st.textContent = '👍 По графику: за ' + paidMonths + ' мес отложено ' + fmt(summerSaved) + ', до цели ' + fmt(summerLeft) + '.';
+    st.style.color = 'var(--green)';
+  } else {
+    st.textContent = '⚠️ Отстаём: за ' + paidMonths + ' мес отложено ' + fmt(summerSaved) + ', по графику надо было ' + fmt(onTrackNeed) + '. До цели ' + fmt(summerLeft) + '.';
+    st.style.color = 'var(--red)';
+  }
+
+  // Свободно на руки = остаток − резерв 20% − плановый взнос в Фонд Лета
+  const freeCash = remainder - sumActual;
+  renderFinance();
+  window.__freeCash = freeCash;   // доход для вкладки «Мои деньги»
+  try { const fc = JSON.parse(localStorage.getItem('ss_free_cash') || '{}'); fc[picker.value] = Math.max(0, Math.round(freeCash)); localStorage.setItem('ss_free_cash', JSON.stringify(fc)); } catch(e) {}
+  pushSchoolToFamily(picker.value, Math.max(0, Math.round(freeCash)));
+  document.getElementById('freeAmt').textContent = fmt(freeCash);
+  document.getElementById('freeAmt').style.color = freeCash >= 0 ? 'var(--green)' : 'var(--red)';
+  document.getElementById('freeSub').textContent = freeCash >= 0
+    ? 'после кредитов и фонда лета'
+    : 'не хватает — сдвинь срок';
+  document.getElementById('potentialRevenue').textContent = fmt(totalPotential);
+  document.getElementById('potentialDiff').textContent = '+' + fmt(totalPotential - totalRevenue) + ' к текущему';
+
+  // Potential banner
+  const gap = totalPotential - totalRevenue;
+  const emptyGroups = GROUPS.filter((g, i) => (state.pupils[i] || 0) === 0).length;
+  document.getElementById('potentialText').innerHTML =
+    `При полном наборе (12 учеников) выручка школы составит <strong>${fmt(totalPotential)}</strong>. ` +
+    `Потенциал роста: <strong>+${fmt(gap)}/мес</strong>` +
+    (emptyGroups > 0 ? `. Групп без учеников: <strong>${emptyGroups}</strong>.` : '.');
+
+  // Deposit block
+  document.getElementById('depositMonth').textContent = fmt(totalDeposit);
+  document.getElementById('depositAccum').textContent = fmt(totalDeposit * 9);
+
+  // Fixed payments block
+  document.getElementById('adminPercent').textContent = fmt(adminPct);
+  document.getElementById('adminTotal').textContent = fmt(adminPay);
+  document.getElementById('adminTotal').className = 'admin-item-value ' + (adminPct >= fixedState.adminMin ? 'green' : 'orange');
+  document.getElementById('adminMinLabel').textContent = fmt(fixedState.adminMin).replace(' ₽','') + ' ₽';
+  document.getElementById('cleaningVal').textContent = fmt(fixedState.cleaning);
+  document.getElementById('smmVal').textContent = fmt(fixedState.smm);
+  document.getElementById('rentVal').textContent = fmt(fixedState.rent);
+  document.getElementById('otrabotki60Count').value = fixedState.otrabotki60 || 0;
+  document.getElementById('otrabotki90Count').value = fixedState.otrabotki90 || 0;
+  document.getElementById('otrabotkiTotal').textContent = fmt(Math.round(otrabotkiPay));
+  renderMonthly('taxes');
+  renderMonthly('costs');
+  const costBtn = document.getElementById('costEditBtn');
+  if (costCrm !== null) {
+    document.getElementById('costVal').textContent = fmt(costPay);
+    document.getElementById('costList').textContent = 'из CRM (Расходы) · автоматически';
+    if (costBtn) costBtn.style.display = 'none';
+  } else if (costBtn) costBtn.style.display = '';
+  ['otrabotki60Count', 'otrabotki90Count'].forEach(id => { const el = document.getElementById(id); if (el) el.readOnly = !!otrAuto; });
+  document.getElementById('loanVal').textContent = fmt(loanPay);
+  document.getElementById('loanList').textContent = creditsState.list.length + ' кредита · закрыть к ' + creditsState.target.split('-').reverse().join('.');
+  document.getElementById('fixedTotal').textContent = fmt(fixedTotal);
+
+  // Teacher blocks
+  const container = document.getElementById('teachersContainer');
+  container.innerHTML = '';
+
+  teachers.forEach(teacher => {
+    const tGroups = GROUPS.map((g, i) => ({ ...g, i })).filter(g => g.teacher === teacher);
+    let tRevenue = 0, tFot = 0, tHands = 0, tDeposit = 0, tPupils = 0;
+
+    tGroups.forEach(g => {
+      if (!isActive(g.i)) return;
+      const c = calcGroup(g.i);
+      tRevenue += c.revenue; tFot += c.fot; tHands += c.hands;
+      tDeposit += c.deposit; tPupils += (state.pupils[g.i] || 0);
+    });
+
+    const color = TEACHER_COLORS[teacher];
+    const initials = TEACHER_INITIALS[teacher];
+
+    const block = document.createElement('div');
+    block.className = 'teacher-block';
+
+    block.innerHTML = `
+      <div class="teacher-header">
+        <div class="teacher-avatar" style="background:${color}">${initials}</div>
+        <div>
+          <div class="teacher-name">${teacher}</div>
+          <div class="teacher-meta">${tGroups.filter(g => isActive(g.i)).length} групп · ${tPupils} учеников</div>
+        </div>
+        <div class="teacher-total">
+          <div class="teacher-total-label">На руки</div>
+          <div class="teacher-total-value" style="color:${color}">${fmt(tHands)}</div>
+        </div>
+        <button class="btn-slip" data-teacher="${teacher}">Квиток ↗</button>
+      </div>
+      <table class="groups-table">
+        <thead>
+          <tr>
+            <th>Группа</th>
+            <th>Формат</th>
+            <th>Учеников</th>
+            <th class="right">Выручка</th>
+            <th class="right">25%</th>
+            <th class="right">Депозит</th>
+            <th class="right">На руки</th>
+          </tr>
+        </thead>
+        <tbody id="tbody-${teacher.replace(/\s/g,'_')}">
+        </tbody>
+      </table>
+    `;
+
+    container.appendChild(block);
+
+    const tbody = block.querySelector('tbody');
+
+    tGroups.forEach(g => {
+      const inactive = !isActive(g.i);
+      const missing = crmMissing(g.i);
+      const c = inactive ? { revenue: 0, fot: 0, deposit: 0, hands: 0 } : calcGroup(g.i);
+      const p = state.pupils[g.i] || 0;
+      const tr = document.createElement('tr');
+      if (inactive) tr.style.opacity = '0.4';
+      tr.innerHTML = `
+        <td class="group-name">
+          <label style="display:inline-flex;align-items:center;gap:6px;cursor:pointer" title="${missing ? 'В CRM нет начислений за этот месяц — группа не считается' : 'Снять галочку — группа не идёт в этом месяце'}">
+            <input type="checkbox" ${inactive ? '' : 'checked'} ${missing ? 'disabled' : ''} onchange="toggleActive(${g.i}, this.checked)" style="cursor:pointer">
+            <span class="pupils-status ${statusDot(p)}"></span>${g.name}${missing ? ' <span style="color:#E8740A;font-size:11px">· нет начислений в CRM</span>' : ''}
+          </label>
+        </td>
+        <td><span class="badge badge-${g.dur}">${g.dur} мин</span></td>
+        <td>
+          <div class="counter">
+            <button onclick="change(${g.i},-1)">−</button>
+            <input type="number" inputmode="numeric" min="0" max="12" value="${p}"
+              onchange="set(${g.i}, this.value)"
+              oninput="set(${g.i}, this.value)">
+            <button onclick="change(${g.i},1)">+</button>
+          </div>
+        </td>
+        <td class="mono">${fmt(c.revenue)}</td>
+        <td class="mono">${fmt(c.fot)}</td>
+        <td class="mono dim">${fmt(c.deposit)}</td>
+        <td class="mono" style="color:${color};font-weight:600">${fmt(c.hands)}</td>
+      `;
+      tbody.appendChild(tr);
+    });
+
+    // Summary row
+    const sumTr = document.createElement('tr');
+    sumTr.className = 'summary-row';
+    sumTr.innerHTML = `
+      <td colspan="3">Итого · ${teacher.split(' ')[0]}</td>
+      <td class="mono">${fmt(tRevenue)}</td>
+      <td class="mono">${fmt(tFot)}</td>
+      <td class="mono dim">${fmt(tDeposit)}</td>
+      <td class="mono" style="color:${color};font-weight:700">${fmt(tHands)}</td>
+    `;
+    tbody.appendChild(sumTr);
+  });
+
+  renderCash({ hands: totalHands, admin: adminPay, otr: otrabotkiPay, fixed: fixedTotal, deposit: totalDeposit });
+
+  // Save current state
+  localStorage.setItem('ss_salary_state', JSON.stringify(state));
+  // и сразу пишем снимок выбранного месяца, чтобы он нашёлся потом
+  if (typeof currentMonth === 'string' && currentMonth) {
+    storeMonth(currentMonth);
+    localStorage.setItem('ss_last_month', currentMonth);
+  }
+}
+
+function change(i, delta) {
+  const cur = state.pupils[i] || 0;
+  state.pupils[i] = Math.max(0, Math.min(MAX_PUPILS, cur + delta));
+  detachCrm(i);
+  render();
+}
+
+function set(i, val) {
+  const v = parseInt(val);
+  if (!isNaN(v)) state.pupils[i] = Math.max(0, Math.min(MAX_PUPILS, v));
+  detachCrm(i);
+  render();
+}
+
+// Ручная правка числа детей отвязывает группу от суммы из CRM:
+// иначе выручка берётся из CRM и не реагирует на изменение детей.
+function toggleActive(i, on) {
+  const ym = curYM();
+  state.offM[ym] = state.offM[ym] || {};
+  if (on) delete state.offM[ym][i]; else state.offM[ym][i] = true;
+  render();
+}
+function detachCrm(i) {
+  if (state.crmRev && state.crmRev[i] != null) delete state.crmRev[i];
+}
+
+// ---- HISTORY ----
+function getHistory() {
+  return JSON.parse(localStorage.getItem('ss_salary_history') || '{}');
+}
+function saveHistory(h) {
+  localStorage.setItem('ss_salary_history', JSON.stringify(h));
+}
+
+// В истории месяц лежит как {pupils, o60, o90}; старые записи — просто карта учеников.
+let lastTotals = null;
+
+function monthSnapshot(rec) {
+  if (!rec) return null;
+  return rec.pupils ? rec : { pupils: rec, o60: 0, o90: 0 };
+}
+
+function teacherHandsFor(month) {
+  const th = {};
+  GROUPS.forEach((g, i) => { th[g.teacher] = (th[g.teacher] || 0) + calcGroup(i, month).hands; });
+  return th;
+}
+function storeMonth(month) {
+  const h = getHistory();
+  h[month] = {
+    th: teacherHandsFor(month),
+    pupils: { ...state.pupils },
+    o60: fixedState.otrabotki60 || 0,
+    o90: fixedState.otrabotki90 || 0,
+    fixed: {
+      cleaning: fixedState.cleaning,
+      smm: fixedState.smm,
+      rent: fixedState.rent,
+      adminMin: fixedState.adminMin,
+    },
+    t: lastTotals ? { ...lastTotals } : (h[month] && h[month].t) || null,
+  };
+  saveHistory(h);
+}
+
+function applyMonth(month) {
+  const rec = monthSnapshot(getHistory()[month]);
+  if (!rec) return false;
+  // с сентября 2026 число учеников — актуальное из CRM, а не из старого сохранения месяца
+  state.pupils = (month >= '2026-09' && state.crmPupils) ? { ...rec.pupils, ...state.crmPupils } : { ...rec.pupils };
+  fixedState.otrabotki60 = rec.o60 || 0;
+  fixedState.otrabotki90 = rec.o90 || 0;
+  if (rec.fixed) Object.assign(fixedState, rec.fixed);
+  localStorage.setItem('ss_salary_state', JSON.stringify(state));
+  saveFixedState();
+  return true;
+}
+
+function saveMonth() {
+  const month = picker.value;
+  storeMonth(month);
+  const btn = document.getElementById('btnSaveMonth');
+  btn.textContent = '✅ Сохранено';
+  btn.style.background = '#22C55E';
+  btn.style.borderColor = '#22C55E';
+  btn.style.color = '#fff';
+  setTimeout(() => {
+    btn.textContent = '💾 Сохранить месяц';
+    btn.style.background = '';
+    btn.style.borderColor = '';
+    btn.style.color = '';
+  }, 2000);
+}
+
+function loadMonth(month) {
+  storeMonth(picker.value);
+  if (!applyMonth(month)) return;
+  picker.value = month;
+  currentMonth = month;
+  updateMonth();
+  render();
+  closeHistoryModal();
+}
+
+function deleteMonth(month) {
+  if (!confirm('Удалить запись за этот месяц?')) return;
+  const h = getHistory();
+  delete h[month];
+  saveHistory(h);
+  renderHistoryModal();
+}
+
+// Month picker
+const picker = document.getElementById('monthPicker');
+const now = new Date();
+picker.value = localStorage.getItem('ss_last_month') || now.toISOString().slice(0, 7);
+setTimeout(fetchFinanceData, 100);
+setTimeout(fetchOtrSavings, 200);
+setTimeout(bbQuietRefresh, 300);
+setTimeout(fetchPayData, 400);
+async function bbQuietRefresh() {
+  const token = localStorage.getItem('bbToken') || '';
+  if (!token || !useCrmRevenue() || window.__bbFromHash) return;   // из закладки данные уже свежее
+  try {
+    const r = await fetch(BB_SERVER + '?t=' + encodeURIComponent(token), { cache: 'no-store' });
+    const d = await r.json();
+    if (d && d.ok && Array.isArray(d.list)) applyBigBen(d.list);
+  } catch (e) {}
+}
+
+function monthNameOf(ym){ return monthNames[+ym.slice(5,7)-1] || ym; }
+const monthNames = ['январь','февраль','март','апрель','май','июнь',
+  'июль','август','сентябрь','октябрь','ноябрь','декабрь'];
+
+function fmtMonth(key) {
+  const [y, m] = key.split('-');
+  const name = monthNames[parseInt(m) - 1];
+  return name.charAt(0).toUpperCase() + name.slice(1) + ' ' + y;
+}
+
+function updateMonth() {
+  const [y, m] = picker.value.split('-');
+  document.getElementById('monthLabel').textContent =
+    monthNames[parseInt(m) - 1] + ' ' + y;
+}
+
+let currentMonth = picker.value;
+
+picker.addEventListener('change', () => {
+  storeMonth(currentMonth);          // текущий месяц не теряем
+  const had = applyMonth(picker.value); // за выбранный месяц поднимаем сохранённое
+  currentMonth = picker.value;
+  updateMonth();
+  applyOtrAuto();                     // отработки за месяц — авто из реальных данных
+  render();
+  renderPremiumBlock();
+  const note = document.getElementById('monthNote');
+  if (note) {
+    note.textContent = had ? 'данные этого месяца загружены' : 'месяц ещё не сохранён — цифры перенесены из прошлого';
+    note.style.opacity = '1';
+    setTimeout(() => { note.style.opacity = '0'; }, 3000);
+  }
+});
+updateMonth();
+
+render();
+renderPremiumBlock();
+
+// Отработки: два счётчика — 60 и 90 минут
+['otrabotki60', 'otrabotki90'].forEach(key => {
+  const el = document.getElementById(key + 'Count');
+  if (!el) return;
+  el.addEventListener('input', function() {
+    if (otrCounts(picker.value)) { render(); return; }   // счётчики идут из вкладки «Отработки»
+    const n = parseFloat(this.value);
+    if (!isNaN(n) && n >= 0) {
+      fixedState[key] = Math.round(n * 10) / 10;
+      saveFixedState();
+      render();
+    }
+  });
+});
+
+// Delegated click for slip buttons and fixed counters
+document.addEventListener('click', function(e) {
+  const btn = e.target.closest('.btn-slip');
+  if (btn) openSlip(btn.dataset.teacher);
+
+  const hBtn = e.target.closest('[data-action]');
+  if (hBtn) {
+    const action = hBtn.dataset.action;
+    const month = hBtn.dataset.month;
+    if (action === 'load') loadMonth(month);
+    if (action === 'delete') deleteMonth(month);
+    if (action === 'editFixed') {
+      const key = hBtn.dataset.key;
+      const labels = { cleaning: 'Уборка помещений', smm: 'Ведение соцсетей', rent: 'Аренда помещения', adminMin: 'Минимум администратора' };
+      const cur = fixedState[key];
+      const val = prompt(labels[key] + '\nНовая сумма (₽):', cur);
+      if (val !== null) {
+        const n = parseInt(val.replace(/\s/g, ''));
+        if (!isNaN(n) && n >= 0) { fixedState[key] = n; saveFixedState(); render(); }
+      }
+    }
+    if (action === 'fixedCounter') {
+      if (otrCounts(picker.value)) return;   // счётчики идут из вкладки «Отработки»
+      const key = hBtn.dataset.key;
+      const delta = parseFloat(hBtn.dataset.delta);
+      fixedState[key] = Math.round(Math.max(0, (fixedState[key] || 0) + delta) * 10) / 10;
+      saveFixedState();
+      render();
+    }
+  }
+});
+
+// ---- EDIT FIXED ----
+function editFixed(key) {
+  const labels = { cleaning: 'Уборка помещений', smm: 'Ведение соцсетей' };
+  const cur = fixedState[key];
+  const val = prompt(`${labels[key]}\nВведи новую сумму (₽):`, cur);
+  if (val === null) return;
+  const n = parseInt(val.replace(/\s/g, ''));
+  if (!isNaN(n) && n >= 0) {
+    fixedState[key] = n;
+    saveFixedState();
+    render();
+  }
+}
+
+function editAdminMin() {
+  const val = prompt('Минимальная ЗП администратора (₽):', fixedState.adminMin);
+  if (val === null) return;
+  const n = parseInt(val.replace(/\s/g, ''));
+  if (!isNaN(n) && n >= 0) {
+    fixedState.adminMin = n;
+    saveFixedState();
+    render();
+  }
+}
+
+function setFixedCounter(key, val) {
+  const n = parseFloat(val);
+  if (!isNaN(n) && n >= 0) {
+    fixedState[key] = n;
+    saveFixedState();
+    render();
+  }
+}
+
+// ---- HISTORY MODAL ----
+function openHistoryModal() {
+  renderHistoryModal();
+  document.getElementById('historyModal').classList.add('open');
+}
+
+function closeHistoryModal() {
+  document.getElementById('historyModal').classList.remove('open');
+}
+
+function closeHistoryModalOverlay(e) {
+  if (e.target === document.getElementById('historyModal')) closeHistoryModal();
+}
+
+function renderHistoryModal() {
+  const h = getHistory();
+  const keys = Object.keys(h).sort().reverse();
+  const list = document.getElementById('historyList');
+
+  if (keys.length === 0) {
+    list.innerHTML = '<div style="text-align:center;color:var(--gray-400);padding:24px;font-size:13px">Нет сохранённых месяцев.<br>Нажми «💾 Сохранить месяц» после ввода данных.</div>';
+    return;
+  }
+
+  const teachers = [...new Set(GROUPS.map(g => g.teacher))];
+
+  list.innerHTML = keys.map(month => {
+    const rec = monthSnapshot(h[month]);
+    const teacherSummary = teachers.map(teacher => {
+      const hands = rec && rec.th && rec.th[teacher] != null ? rec.th[teacher] : null;   // старые записи без расчёта — «—»
+      const color = TEACHER_COLORS[teacher];
+      const initials = TEACHER_INITIALS[teacher];
+      return `<div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">
+        <div style="width:22px;height:22px;border-radius:50%;background:${color};color:#fff;font-size:9px;font-weight:700;display:flex;align-items:center;justify-content:center">${initials}</div>
+        <span style="font-size:12px;color:var(--gray-600);flex:1">${teacher.split(' ')[0]}</span>
+        <span style="font-family:var(--mono);font-size:13px;font-weight:600;color:${color}">${hands == null ? '—' : fmt(hands)}</span>
+      </div>`;
+    }).join('');
+
+    return `<div style="background:var(--gray-50);border:1.5px solid var(--gray-200);border-radius:12px;padding:14px 16px;margin-bottom:10px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+        <div style="font-size:14px;font-weight:700">${fmtMonth(month)}</div>
+        <div style="display:flex;gap:8px">
+          <button data-action="load" data-month="${month}" style="
+            font-family:var(--font);font-size:12px;font-weight:600;
+            padding:5px 12px;border-radius:20px;cursor:pointer;
+            background:var(--purple);color:#fff;border:none;">
+            Загрузить
+          </button>
+          <button data-action="delete" data-month="${month}" style="
+            font-family:var(--font);font-size:12px;font-weight:600;
+            padding:5px 10px;border-radius:20px;cursor:pointer;
+            background:none;color:var(--gray-400);border:1.5px solid var(--gray-200);">
+            ✕
+          </button>
+        </div>
+      </div>
+      ${teacherSummary}
+    </div>`;
+  }).join('');
+}
+
+// ---- SLIP ----
+function slipHistory(teacher) {
+  const h = getHistory();
+  const keys = Object.keys(h).sort().reverse().slice(0, 6);
+  if (keys.length === 0) return '';
+
+  const color = TEACHER_COLORS[teacher];
+  const tGroupIdxs = GROUPS.map((g, i) => ({...g, i})).filter(g => g.teacher === teacher);
+
+  const rows = keys.map(month => {
+    const rec = monthSnapshot(h[month]);
+    const hands = rec && rec.th && rec.th[teacher] != null ? rec.th[teacher] : null;
+    return `<tr>
+      <td style="padding:6px 8px;font-size:12px;color:var(--gray-600)">${fmtMonth(month)}</td>
+      <td style="padding:6px 8px;font-size:13px;font-weight:600;text-align:right;font-family:var(--mono);color:${color}">${hands == null ? '—' : fmt(hands)}</td>
+    </tr>`;
+  }).join('');
+
+  return `
+    <div style="margin-top:16px">
+      <div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;color:var(--gray-400);margin-bottom:8px">История выплат</div>
+      <table style="width:100%;border-collapse:collapse">
+        <tbody>${rows}</tbody>
+      </table>
+    </div>`;
+}
+
+let currentSlipTeacher = '';
+
+// ---------- АНАЛИЗ: МЕСЯЦ К МЕСЯЦУ ----------
+
+function analysisRows() {
+  const h = getHistory();
+  return Object.keys(h).sort().map(m => {
+    const rec = monthSnapshot(h[m]);
+    return rec && rec.t ? { m, ...rec.t } : null;
+  }).filter(Boolean);
+}
+
+function deltaHTML(cur, prev, unit) {
+  if (prev == null || !prev) return '<span style="color:var(--gray-300)">—</span>';
+  const d = cur - prev;
+  if (!d) return '<span style="color:var(--gray-400)">без изменений</span>';
+  const pct = Math.round((d / Math.abs(prev)) * 100);
+  const up = d > 0;
+  const color = up ? 'var(--green)' : 'var(--red, #DC2626)';
+  const sign = up ? '+' : '−';
+  const val = unit === '₽' ? fmt(Math.abs(d)) : Math.abs(d) + ' ' + unit;
+  return `<span style="color:${color};font-weight:600">${sign}${val} · ${sign}${Math.abs(pct)}%</span>`;
+}
+
+function chartSVG(rows) {
+  const W = 820, H = 240, padL = 58, padR = 46, padT = 18, padB = 34;
+  const innerW = W - padL - padR, innerH = H - padT - padB;
+  const maxRev = Math.max(...rows.map(r => r.revenue), 1);
+  const maxPup = Math.max(...rows.map(r => r.pupils), 1);
+  const step = innerW / rows.length;
+  const bw = Math.min(46, step * 0.52);
+
+  let bars = '', line = '', dots = '', labels = '';
+  rows.forEach((r, i) => {
+    const cx = padL + step * i + step / 2;
+    const bh = (r.revenue / maxRev) * innerH;
+    bars += `<rect x="${(cx - bw / 2).toFixed(1)}" y="${(padT + innerH - bh).toFixed(1)}" width="${bw.toFixed(1)}" height="${bh.toFixed(1)}" rx="5" fill="var(--purple)" opacity="0.85"><title>${fmtMonth(r.m)} · ${fmt(r.revenue)}</title></rect>`;
+    const py = padT + innerH - (r.pupils / maxPup) * innerH;
+    line += (i ? ' L' : 'M') + cx.toFixed(1) + ' ' + py.toFixed(1);
+    dots += `<circle cx="${cx.toFixed(1)}" cy="${py.toFixed(1)}" r="4.5" fill="#F5C842" stroke="#fff" stroke-width="1.6"><title>${fmtMonth(r.m)} · ${r.pupils} учеников</title></circle>`;
+    const [, mm] = r.m.split('-');
+    labels += `<text x="${cx.toFixed(1)}" y="${H - 10}" text-anchor="middle" font-size="11" fill="var(--gray-400)">${monthNames[+mm - 1].slice(0, 3)}</text>`;
+  });
+
+  let grid = '';
+  for (let k = 0; k <= 3; k++) {
+    const y = padT + innerH - (innerH / 3) * k;
+    grid += `<line x1="${padL}" y1="${y.toFixed(1)}" x2="${W - padR}" y2="${y.toFixed(1)}" stroke="var(--gray-100)" stroke-width="1"/>`;
+    grid += `<text x="${padL - 8}" y="${(y + 3.5).toFixed(1)}" text-anchor="end" font-size="10" fill="var(--gray-400)">${Math.round(maxRev / 3 * k / 1000)}к</text>`;
+    grid += `<text x="${W - padR + 8}" y="${(y + 3.5).toFixed(1)}" font-size="10" fill="#B58A00">${Math.round(maxPup / 3 * k)}</text>`;
+  }
+
+  return `<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto;display:block">
+    ${grid}${bars}
+    <path d="${line}" fill="none" stroke="#F5C842" stroke-width="2.5" stroke-linejoin="round"/>
+    ${dots}${labels}
+  </svg>`;
+}
+
+function openAnalysis() {
+  const rows = analysisRows();
+  const body = document.getElementById('analysisBody');
+
+  if (rows.length < 2) {
+    body.innerHTML = `<div style="background:var(--gray-50);border-radius:12px;padding:18px;font-size:13px;color:var(--gray-600);line-height:1.6">
+      Пока сравнивать не с чем: в истории ${rows.length === 1 ? 'один месяц' : 'нет месяцев'}.
+      Каждый месяц запоминается сам, как только ты его открываешь и считаешь, — вернись сюда в конце следующего.
+    </div>`;
+    document.getElementById('analysisModal').classList.add('open');
+    return;
+  }
+
+  const last = rows[rows.length - 1], first = rows[0];
+  const legend = `<div style="display:flex;gap:16px;font-size:12px;color:var(--gray-600);margin:0 0 6px">
+      <span><span style="display:inline-block;width:10px;height:10px;border-radius:3px;background:var(--purple);margin-right:5px"></span>выручка</span>
+      <span><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#F5C842;margin-right:5px"></span>ученики</span>
+    </div>`;
+
+  let table = `<div style="overflow-x:auto;margin-top:14px"><table style="width:100%;min-width:520px;border-collapse:collapse;font-size:12.5px;font-variant-numeric:tabular-nums">
+    <thead><tr style="color:var(--gray-400);font-size:11px;text-transform:uppercase;letter-spacing:.04em">
+      <th style="text-align:left;padding:6px 8px">Месяц</th>
+      <th style="text-align:right;padding:6px 8px">Ученики</th>
+      <th style="text-align:right;padding:6px 8px">± к прошлому</th>
+      <th style="text-align:right;padding:6px 8px">Выручка</th>
+      <th style="text-align:right;padding:6px 8px">± к прошлому</th>
+      <th style="text-align:right;padding:6px 8px">Прибыль</th>
+    </tr></thead><tbody>`;
+  rows.forEach((r, i) => {
+    const prev = i ? rows[i - 1] : null;
+    table += `<tr style="border-top:1px solid var(--gray-100)">
+      <td style="padding:7px 8px">${fmtMonth(r.m)}</td>
+      <td style="padding:7px 8px;text-align:right">${r.pupils}</td>
+      <td style="padding:7px 8px;text-align:right">${deltaHTML(r.pupils, prev && prev.pupils, 'уч.')}</td>
+      <td style="padding:7px 8px;text-align:right">${fmt(r.revenue)}</td>
+      <td style="padding:7px 8px;text-align:right">${deltaHTML(r.revenue, prev && prev.revenue, '₽')}</td>
+      <td style="padding:7px 8px;text-align:right;color:${r.profit >= 0 ? 'var(--green)' : 'var(--red, #DC2626)'}">${fmt(r.profit)}</td>
+    </tr>`;
+  });
+  table += '</tbody></table></div>';
+
+  const spanPupils = deltaHTML(last.pupils, first.pupils, 'уч.');
+  const spanRev = deltaHTML(last.revenue, first.revenue, '₽');
+  const summary = `<div style="background:var(--gray-50);border-radius:12px;padding:12px 14px;font-size:13px;color:var(--gray-600);line-height:1.7;margin-top:14px">
+    За ${rows.length} ${rows.length < 5 ? 'месяца' : 'месяцев'} — с ${fmtMonth(first.m).toLowerCase()} по ${fmtMonth(last.m).toLowerCase()}:
+    ученики ${spanPupils}, выручка ${spanRev}.<br>
+    Последний месяц: фонд педагогов ${fmt(last.fot)}, фиксированные ${fmt(last.fixed)}, из них налоги ${fmt(last.taxes)} и кредит ${fmt(last.loans)}.
+  </div>`;
+
+  body.innerHTML = legend + chartSVG(rows) + table + summary;
+  document.getElementById('analysisModal').classList.add('open');
+}
+
+function closeAnalysis() {
+  document.getElementById('analysisModal').classList.remove('open');
+}
+
+// ---------- КВИТОК АДМИНИСТРАТОРА ----------
+const ADMIN_SLIP = '__admin__';
+
+// Возврат абонементных скидок, активных в ВЫБРАННОМ месяце (from ≤ месяц ≤ until).
+// Сам тает, когда абонемент кончается. Только абонементы; семейные/индивидуальные — нет.
+function adminAbonback() {
+  const mon = (typeof picker !== 'undefined' && picker && picker.value) || '';
+  const list = (fixedState.abonements) || [];
+  const early = monthCrm(mon) ? earlyMonth(mon) : 0;          // + скидка ранней оплаты (сентябрь)
+  return early + list.reduce((s, e) => {
+    if (!e || !mon) return s;
+    const from = e.from || '0000-00', until = e.until || '9999-99';
+    return (from <= mon && mon <= until) ? s + (+e.disc || 0) : s;
+  }, 0);
+}
+
+// Скидки длинных абонементов детей ЭТОЙ группы, активные в месяце. Выручка группы (и 25% учителю)
+// считается по реальным деньгам — без этих скидок; Наталье они возвращаются в базу (adminAbonback).
+function abonDiscGroup(i, ym) {
+  const mon = ym || curYM();
+  const key = bbNorm(GROUPS[i].name);
+  return ((fixedState.abonements) || []).reduce((s, e) => {
+    if (!e || !e.group || bbNorm(e.group) !== key) return s;
+    return ((e.from || '0000-00') <= mon && mon <= (e.until || '9999-99')) ? s + (+e.disc || 0) : s;
+  }, 0);
+}
+function adminAbonbackCount() {
+  const mon = (typeof picker !== 'undefined' && picker && picker.value) || '';
+  return ((fixedState.abonements) || []).filter(e => e && mon && (e.from || '0000-00') <= mon && mon <= (e.until || '9999-99')).length;
+}
+
+function adminNumbers() {
+  let revenue = 0;
+  GROUPS.forEach((g, i) => {
+    if (!isActive(i)) return;   // только группы, что идут в выручку месяца — как на дашборде
+    revenue += calcGroup(i).revenue;
+  });
+  const abonback = adminAbonback();                    // возврат абонементных скидок (активных в этом месяце)
+  const base = revenue + abonback;
+  const pct = Math.round(base * ADMIN_PCT);
+  const min = fixedState.adminMin;
+  return { revenue, abonback, base, pct, min, pay: Math.max(pct, min), byMin: pct < min };
+}
+
+function adminName() {
+  return fixedState.adminName || 'Наталья';
+}
+
+function editAdminName() {
+  const v = prompt('Имя администратора для квитка:', adminName());
+  if (v === null) return;
+  fixedState.adminName = v.trim();
+  saveFixedState();
+  openAdminSlip();
+}
+
+// Возврат абонементных скидок в базу администратора (в месяц). Только абонементы —
+// индивидуальные/семейные скидки (5%/10%/100%) НЕ трогаем, их по % не отличить,
+// поэтому сумма считается по списку абонементщиков и правится вручную.
+function editAdminAbonback() {
+  const list = fixedState.abonements || [];
+  const cur = list.map(e => `${e.name} ; ${e.disc} ; ${e.from || '2026-09'} ; ${e.until} ; ${e.group || ''}`).join('\n');
+  const v = prompt(
+    'Абонементы — по одному в строке:\nИмя ; скидка ₽/мес ; с ГГГГ-ММ ; до ГГГГ-ММ ; группа (как в калькуляторе, напр. GMF 2B)\n\n' +
+    'Возврат за месяц = сумма активных (сам тает, когда абонемент кончается).\n' +
+    'Только абонементы; семейные/индивидуальные скидки сюда НЕ вносить.', cur);
+  if (v === null) return;
+  const parsed = String(v).split(/\n/)
+    .map(l => l.split(';').map(s => s.trim()))
+    .filter(p => p.length >= 3 && p[0])
+    .map(p => ({ name: p[0], disc: parseInt((p[1] || '').replace(/\s/g, '')) || 0, from: p[2] || '2026-09', until: p[3] || p[2] || '2027-05', group: p[4] || '' }));
+  fixedState.abonements = parsed;
+  saveFixedState();
+  render();
+  openAdminSlip();
+}
+
+function periodLabel() {
+  const [y, m] = picker.value.split('-');
+  const name = monthNames[parseInt(m) - 1];
+  return name.charAt(0).toUpperCase() + name.slice(1) + ' ' + y;
+}
+
+function openAdminSlip() {
+  currentSlipTeacher = ADMIN_SLIP;
+  const a = adminNumbers();
+  const period = periodLabel();
+
+  document.getElementById('slipContent').innerHTML = `
+    <div class="slip-header">
+      <div class="slip-logo">🦝</div>
+      <div>
+        <div class="slip-school">Speak&Smile · Норильск</div>
+        <div class="slip-title">Расчётный лист</div>
+      </div>
+      <div class="slip-period">${period}</div>
+    </div>
+
+    <div class="slip-name">${adminName()}
+      <button onclick="editAdminName()" title="Изменить имя" style="margin-left:8px;font-size:13px;background:none;border:1px solid var(--gray-200);border-radius:8px;padding:1px 7px;cursor:pointer;color:var(--gray-400)">✏️</button>
+    </div>
+    <div class="slip-meta">Администратор школы · оплата 5% от выручки, но не менее ${fmt(a.min)}</div>
+
+    <table class="slip-groups">
+      <tbody>
+        <tr><td>Выручка школы за месяц</td><td class="r">${fmt(a.revenue)}</td></tr>
+        <tr><td>+ Возврат скидок (абонементы${monthCrm(picker.value) && earlyMonth() ? ', ранняя оплата ' + fmt(earlyMonth()) : ''}) <span style="color:var(--gray-400);font-size:11px">· активных ${adminAbonbackCount()}</span>
+          <button onclick="editAdminAbonback()" title="Изменить список абонементов" style="margin-left:4px;font-size:11px;background:none;border:1px solid var(--gray-200);border-radius:8px;padding:0 6px;cursor:pointer;color:var(--gray-400)">✏️</button></td><td class="r">${fmt(a.abonback)}</td></tr>
+        <tr><td><b>База для 5%</b></td><td class="r"><b>${fmt(a.base)}</b></td></tr>
+        <tr><td>5% от базы</td><td class="r">${fmt(a.pct)}</td></tr>
+        <tr><td>Гарантированный минимум</td><td class="r">${fmt(a.min)}</td></tr>
+      </tbody>
+    </table>
+
+    <hr class="slip-divider">
+
+    <div class="slip-total-row highlight">
+      <span class="slip-total-label">К выплате на руки</span>
+      <span class="slip-total-value" style="color:var(--green)">${fmt(a.pay)}</span>
+    </div>
+
+    <div class="slip-deposit-note">
+      ${a.byMin
+        ? `💜 В этом месяце 5% составили ${fmt(a.pct)} — это меньше минимума, поэтому к выплате идёт ${fmt(a.min)}.`
+        : `💜 Выручка выше порога: 5% = ${fmt(a.pct)}, минимум ${fmt(a.min)} уже перекрыт.`}
+      <br>Чтобы 5% обгоняли минимум, выручка школы должна быть выше ${fmt(Math.round(a.min / ADMIN_PCT))}.
+    </div>
+
+    <div class="slip-footer">
+      Speak&Smile · ИП Синцова О.В. · ${period}<br>
+      Документ сформирован автоматически
+    </div>
+  `;
+
+  document.getElementById('slipModal').classList.add('open');
+}
+
+function printAdminSlip() {
+  const a = adminNumbers();
+  const period = periodLabel();
+  const [y, m] = picker.value.split('-');
+
+  const row = (label, value, bold) => `<tr>
+    <td style="padding:5px 6px;border-bottom:1px solid #eee${bold ? ';font-weight:bold' : ''}">${label}</td>
+    <td style="padding:5px 6px;border-bottom:1px solid #eee;text-align:right${bold ? ';font-weight:bold' : ''}">${fmt(value)}</td>
+  </tr>`;
+
+  document.getElementById('printArea').innerHTML = `
+    <div class="print-copy">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px">
+        <div>
+          <div style="font-size:13px;font-weight:bold">Расчётный лист № ${m + y.slice(2)}</div>
+          <div style="font-size:10px;color:#555;margin-top:2px">за ${period} · г. Норильск</div>
+        </div>
+        <div style="font-size:10px;text-align:right;color:#555">Администратор школы</div>
+      </div>
+
+      <div style="font-size:10px;margin-bottom:8px;line-height:1.6">
+        <strong>Работодатель:</strong> ИП Синцова О.В., ОГРНИП 312245734100051, ИНН 245718463277<br>
+        <strong>Получатель:</strong> ${adminName()}
+      </div>
+
+      <div style="font-size:10px;margin-bottom:8px">
+        Оплата труда администратора: 5% от выручки школы за месяц, но не менее ${fmt(a.min)}.
+      </div>
+
+      <table style="width:100%;border-collapse:collapse;font-size:10px;margin-bottom:10px">
+        <tbody>
+          ${row('Выручка школы за месяц', a.revenue)}
+          ${row('Возврат абонементных скидок', a.abonback)}
+          ${row('База для 5%', a.base, true)}
+          ${row('5% от базы', a.pct)}
+          ${row('Гарантированный минимум', a.min)}
+          ${row('К выплате', a.pay, true)}
+        </tbody>
+      </table>
+
+      <div style="font-size:9px;color:#777;margin-bottom:14px">
+        ${a.byMin
+          ? `5% от базы (${fmt(a.pct)}) ниже минимума — к выплате принят минимум.`
+          : `5% от базы (${fmt(a.pct)}) выше минимума — к выплате принят процент.`}
+      </div>
+
+      <div style="display:flex;gap:20px;margin-top:8px">
+        <div style="flex:1">
+          <div style="font-size:9px;color:#555;margin-bottom:20px">Начислил: ИП Синцова О.В.</div>
+          <div style="border-top:1px solid #333;width:160px;padding-top:3px;font-size:9px">подпись / Синцова О.В.</div>
+        </div>
+        <div style="flex:1">
+          <div style="font-size:9px;color:#555;margin-bottom:20px">Получил: ${adminName()}</div>
+          <div style="border-top:1px solid #333;width:160px;padding-top:3px;font-size:9px">подпись / дата</div>
+        </div>
+      </div>
+    </div>`;
+
+  const printArea = document.getElementById('printArea');
+  printArea.style.display = 'block';
+  window.print();
+  setTimeout(() => { printArea.style.display = 'none'; }, 1000);
+}
+
+function copyAdminSlip() {
+  const a = adminNumbers();
+  const lines = [
+    `Расчётный лист · Speak&Smile`,
+    `${adminName()} · ${periodLabel()}`,
+    '─'.repeat(44),
+    `Выручка школы:${String(fmt(a.revenue)).padStart(30)}`,
+    `Возврат абонементов:${String(fmt(a.abonback)).padStart(24)}`,
+    `База для 5%:${String(fmt(a.base)).padStart(32)}`,
+    `5% от базы:${String(fmt(a.pct)).padStart(33)}`,
+    `Минимум:${String(fmt(a.min)).padStart(36)}`,
+    '─'.repeat(44),
+    `К ВЫПЛАТЕ:${String(fmt(a.pay)).padStart(34)}`,
+  ];
+  navigator.clipboard.writeText(lines.join('\n')).then(() => {
+    const btn = document.querySelector('.btn-action.copy');
+    btn.textContent = '✅ Скопировано';
+    setTimeout(() => btn.textContent = '📋 Скопировать', 2000);
+  });
+}
+
+function openSlip(teacher) {
+  currentSlipTeacher = teacher;
+  const [y, m] = picker.value.split('-');
+  const monthName = monthNames[parseInt(m) - 1];
+  const period = monthName.charAt(0).toUpperCase() + monthName.slice(1) + ' ' + y;
+
+  const tGroups = GROUPS.map((g, i) => ({ ...g, i })).filter(g => g.teacher === teacher && isActive(g.i));
+  let tRevenue = 0, tFot = 0, tHands = 0, tDeposit = 0, tPupils = 0;
+
+  tGroups.forEach(g => {
+    const c = calcGroup(g.i);
+    tRevenue += c.revenue; tFot += c.fot; tHands += c.hands;
+    tDeposit += c.deposit; tPupils += (state.pupils[g.i] || 0);
+  });
+
+  const color = TEACHER_COLORS[teacher];
+  const firstName = teacher.split(' ')[0];
+
+  let groupRows = '';
+  tGroups.forEach(g => {
+    const c = calcGroup(g.i);
+    const p = state.pupils[g.i] || 0;
+    groupRows += `
+      <tr>
+        <td>${g.name}</td>
+        <td>${g.dur} мин</td>
+        <td class="r">${p}</td>
+        <td class="r">${fmt(c.revenue)}</td>
+        <td class="r">${fmt(c.fot)}</td>
+        <td class="r" style="color:#9B9B9B">${fmt(c.deposit)}</td>
+        <td class="r" style="color:${color};font-weight:600">${fmt(c.hands)}</td>
+      </tr>`;
+  });
+
+  document.getElementById('slipContent').innerHTML = `
+    <div class="slip-header">
+      <div class="slip-logo">🦝</div>
+      <div>
+        <div class="slip-school">Speak&Smile · Норильск</div>
+        <div class="slip-title">Расчётный лист</div>
+      </div>
+      <div class="slip-period">${period}</div>
+    </div>
+
+    <div class="slip-name">${teacher}</div>
+    <div class="slip-meta">${tGroups.length} групп · ${tPupils} учеников</div>
+
+    <table class="slip-groups">
+      <thead>
+        <tr>
+          <th>Группа</th>
+          <th>Мин</th>
+          <th class="r">Уч.</th>
+          <th class="r">Выручка</th>
+          <th class="r">25%</th>
+          <th class="r">Депозит</th>
+          <th class="r">На руки</th>
+        </tr>
+      </thead>
+      <tbody>${groupRows}</tbody>
+    </table>
+
+    <hr class="slip-divider">
+
+    <div class="slip-total-row">
+      <span class="slip-total-label">Итого начислено (25%)</span>
+      <span class="slip-total-value">${fmt(tFot)}</span>
+    </div>
+    <div class="slip-total-row">
+      <span class="slip-total-label">Депозит на отпускные</span>
+      <span class="slip-total-value" style="color:#9B9B9B">− ${fmt(tDeposit)}</span>
+    </div>
+    <div class="slip-total-row highlight" style="margin-top:8px;padding-top:8px;border-top:1.5px solid #E0E0E0">
+      <span class="slip-total-label">К выплате на руки</span>
+      <span class="slip-total-value" style="color:${color}">${fmt(tHands)}</span>
+    </div>
+
+    <div class="slip-deposit-note">
+      💜 Депозит <strong>${fmt(tDeposit)}/мес</strong> накапливается и выплачивается в конце учебного года как отпускные.<br>
+      За 9 месяцев накопится: <strong>${fmt(tDeposit * 9)}</strong>
+    </div>
+
+    ${slipHistory(teacher)}
+
+    <div class="slip-footer">
+      Speak&Smile · ИП Синцова О.В. · ${period}<br>
+      Документ сформирован автоматически
+    </div>
+  `;
+
+  document.getElementById('slipModal').classList.add('open');
+}
+
+function closeSlip(e) {
+  if (e.target === document.getElementById('slipModal')) closeSlipBtn();
+}
+
+function closeSlipBtn() {
+  document.getElementById('slipModal').classList.remove('open');
+}
+
+function printSlip() {
+  if (currentSlipTeacher === ADMIN_SLIP) return printAdminSlip();
+  const teacher = currentSlipTeacher;
+  const [y, m] = picker.value.split('-');
+  const monthName = monthNames[parseInt(m) - 1];
+  const period = monthName.charAt(0).toUpperCase() + monthName.slice(1) + ' ' + y;
+  const monthNum = m + '.' + y;
+
+  const tGroups = GROUPS.map((g, i) => ({...g, i})).filter(g => g.teacher === teacher && isActive(g.i));
+  let tRevenue = 0, tFot = 0, tHands = 0, tDeposit = 0;
+  tGroups.forEach(g => {
+    const c = calcGroup(g.i);
+    tRevenue += c.revenue; tFot += c.fot; tHands += c.hands; tDeposit += c.deposit;
+  });
+
+  // Find teacher IP info
+  const teacherINN = {
+    'Ксения Шиллер': 'ИП Шиллер К.И., НПД',
+    'Екатерина Курагина': 'ИП Курагина Е.Ю., НПД',
+    'Оксана Синцова': 'ИП Синцова О.В.'
+  };
+
+  let groupRows = '';
+  tGroups.forEach(g => {
+    const c = calcGroup(g.i);
+    const p = state.pupils[g.i] || 0;
+    groupRows += `<tr>
+      <td style="padding:3px 6px;border-bottom:1px solid #eee">${g.name}</td>
+      <td style="padding:3px 6px;border-bottom:1px solid #eee;text-align:center">${g.dur}м</td>
+      <td style="padding:3px 6px;border-bottom:1px solid #eee;text-align:right">${p}</td>
+      <td style="padding:3px 6px;border-bottom:1px solid #eee;text-align:right">${fmt(c.revenue)}</td>
+      <td style="padding:3px 6px;border-bottom:1px solid #eee;text-align:right">${fmt(c.fot)}</td>
+      <td style="padding:3px 6px;border-bottom:1px solid #eee;text-align:right;color:#999">${fmt(c.deposit)}</td>
+      <td style="padding:3px 6px;border-bottom:1px solid #eee;text-align:right;font-weight:bold">${fmt(c.hands)}</td>
+    </tr>`;
+  });
+
+  const actNum = m + y.slice(2);
+
+  const copyHTML = (copyFor) => `
+    <div class="print-copy">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px">
+        <div>
+          <div style="font-size:13px;font-weight:bold">АКТ № ${actNum} приёмки оказанных услуг</div>
+          <div style="font-size:10px;color:#555;margin-top:2px">за ${period} · г. Норильск</div>
+        </div>
+        <div style="font-size:10px;text-align:right;color:#555">
+          Экземпляр: <strong>${copyFor}</strong>
+        </div>
+      </div>
+
+      <div style="font-size:10px;margin-bottom:8px;line-height:1.6">
+        <strong>Заказчик:</strong> ИП Синцова О.В., ОГРНИП 312245734100051, ИНН 245718463277<br>
+        <strong>Исполнитель:</strong> ${teacherINN[teacher] || teacher}
+      </div>
+
+      <div style="font-size:10px;margin-bottom:8px">
+        Исполнитель оказал, а Заказчик принял услуги по проведению групповых занятий
+        по английскому языку в школе Speak&amp;Smile за <strong>${period}</strong>:
+      </div>
+
+      <table style="width:100%;border-collapse:collapse;font-size:10px;margin-bottom:8px">
+        <thead>
+          <tr style="background:#f5f5f5">
+            <th style="padding:4px 6px;text-align:left;border-bottom:1.5px solid #ccc">Группа</th>
+            <th style="padding:4px 6px;text-align:center;border-bottom:1.5px solid #ccc">Мин</th>
+            <th style="padding:4px 6px;text-align:right;border-bottom:1.5px solid #ccc">Уч.</th>
+            <th style="padding:4px 6px;text-align:right;border-bottom:1.5px solid #ccc">Выручка</th>
+            <th style="padding:4px 6px;text-align:right;border-bottom:1.5px solid #ccc">25%</th>
+            <th style="padding:4px 6px;text-align:right;border-bottom:1.5px solid #ccc">Депозит</th>
+            <th style="padding:4px 6px;text-align:right;border-bottom:1.5px solid #ccc">На руки</th>
+          </tr>
+        </thead>
+        <tbody>${groupRows}</tbody>
+        <tfoot>
+          <tr style="font-weight:bold;background:#f9f9f9">
+            <td colspan="4" style="padding:4px 6px;border-top:1.5px solid #ccc">ИТОГО</td>
+            <td style="padding:4px 6px;border-top:1.5px solid #ccc;text-align:right">${fmt(tFot)}</td>
+            <td style="padding:4px 6px;border-top:1.5px solid #ccc;text-align:right;color:#999">${fmt(tDeposit)}</td>
+            <td style="padding:4px 6px;border-top:1.5px solid #ccc;text-align:right">${fmt(tHands)}</td>
+          </tr>
+        </tfoot>
+      </table>
+
+      <div style="font-size:10px;margin-bottom:10px;line-height:1.7">
+        Начислено (25%): <strong>${fmt(tFot)}</strong> &nbsp;|&nbsp;
+        Депозит в премфонд: <strong style="color:#999">− ${fmt(tDeposit)}</strong> &nbsp;|&nbsp;
+        <strong>К выплате: ${fmt(tHands)}</strong>
+      </div>
+
+      <div style="font-size:9px;color:#777;margin-bottom:12px">
+        Депозит ${fmt(tDeposit)}/мес накапливается и выплачивается единовременно не позднее 30 июня 2027 г.
+        по итогам выполнения критериев Приложения №3 к Договору.
+      </div>
+
+      <div style="display:flex;gap:20px;margin-top:8px">
+        <div style="flex:1">
+          <div style="font-size:9px;color:#555;margin-bottom:20px">Заказчик: ИП Синцова О.В.</div>
+          <div style="border-top:1px solid #333;width:160px;padding-top:3px;font-size:9px">подпись / Синцова О.В.</div>
+        </div>
+        <div style="flex:1">
+          <div style="font-size:9px;color:#555;margin-bottom:20px">Исполнитель: ${teacher.split(' ')[0]} ${teacher.split(' ')[1][0]}.</div>
+          <div style="border-top:1px solid #333;width:160px;padding-top:3px;font-size:9px">подпись / ${teacher.split(' ')[1]} ${teacher.split(' ')[0][0]}.${teacher.split(' ')[2] ? teacher.split(' ')[2][0]+'.' : ''}</div>
+        </div>
+      </div>
+    </div>`;
+
+  const printArea = document.getElementById('printArea');
+  printArea.innerHTML = copyHTML('Заказчик') +
+    '<div class="print-cut-label">✂ — — — — — — — — — — — — — — — — — — — — — — — — — — — — —</div>' +
+    copyHTML('Исполнитель');
+
+  printArea.style.display = 'block';
+  window.print();
+  setTimeout(() => { printArea.style.display = 'none'; }, 1000);
+}
+
+function copySlip() {
+  if (currentSlipTeacher === ADMIN_SLIP) return copyAdminSlip();
+  const teacher = currentSlipTeacher;
+  const period = document.querySelector('.slip-period')?.textContent || '';
+
+  const tGroups = GROUPS.map((g, i) => ({ ...g, i })).filter(g => g.teacher === teacher && isActive(g.i));
+  let tFot = 0, tHands = 0, tDeposit = 0;
+  let lines = [`Расчётный лист · Speak&Smile\n${teacher} · ${period}\n`];
+  lines.push('─'.repeat(44));
+
+  tGroups.forEach(g => {
+    const c = calcGroup(g.i);
+    const p = state.pupils[g.i] || 0;
+    tFot += c.fot; tHands += c.hands; tDeposit += c.deposit;
+    lines.push(`${g.name.padEnd(22)} ${String(p).padStart(2)} уч.   ${String(fmt(c.hands)).padStart(10)}`);
+  });
+
+  lines.push('─'.repeat(44));
+  lines.push(`Начислено 25%:${String(fmt(tFot)).padStart(30)}`);
+  lines.push(`Депозит (отпускные):${String('− ' + fmt(tDeposit)).padStart(24)}`);
+  lines.push(`К ВЫПЛАТЕ:${String(fmt(tHands)).padStart(34)}`);
+  lines.push('\n💜 Депозит выплачивается в конце года как отпускные.');
+  lines.push(`За 9 месяцев: ${fmt(tDeposit * 9)}`);
+
+  navigator.clipboard.writeText(lines.join('\n')).then(() => {
+    const btn = document.querySelector('.btn-action.copy');
+    btn.textContent = '✅ Скопировано';
+    setTimeout(() => btn.textContent = '📋 Скопировать', 2000);
+  });
+}
+// ---------- ИМПОРТ УЧЕНИКОВ ИЗ BIGBEN ----------
+// Кнопка-закладка снимает со страницы «Группы» в админке BigBen список
+// «название группы + сколько учеников» и открывает калькулятор со ссылкой #bb=…
+
+const CYR2LAT = {'а':'a','в':'b','с':'c','е':'e','к':'k','м':'m','н':'h','о':'o','р':'p','т':'t','у':'y','х':'x'};
+
+function bbNorm(name) {
+  let t = (name || '').toLowerCase();
+  t = t.replace(/[авсекмнортух]/g, ch => CYR2LAT[ch] || ch);
+  t = t.replace(/give\s*me\s*five/g, 'gmf')
+       .replace(/genki\s*english/g, 'genki')
+       .replace(/get\s*involved/g, 'getinvolved');
+  return t.replace(/[^a-z0-9]/g, '');
+}
+
+// BigBen называет группы без буквы потока (PREPARE 3), в калькуляторе — с буквой (Prepare 3A).
+function bbMatch(bbName) {
+  const key = bbNorm(bbName);
+  let idx = GROUPS.findIndex(g => bbNorm(g.name) === key);
+  if (idx >= 0) return idx;
+  const loose = GROUPS.map((g, i) => ({ i, n: bbNorm(g.name) }))
+                      .filter(o => o.n.length === key.length + 1 && o.n.startsWith(key));
+  return loose.length === 1 ? loose[0].i : -1;
+}
+
+function applyBigBen(rawList) {
+  const changed = [], same = [], unknown = [], missed = [], money = [];
+  const touched = new Set();
+  const crmPupils = {};
+  if (!state.crmRev) state.crmRev = {};
+  // служебная запись в конце списка: выручка по месяцам, не группа
+  const tag = rawList.find(x => x && !x.n && !x.name) || {};
+  const revByMonth = tag.rev || (tag.mon ? { [tag.mon]: null } : {});
+  const list = rawList.filter(x => x && (x.n || x.name));
+  // берём месяц, выбранный в шапке; если данных за него нет — ближайший имеющийся
+  const wanted = (document.getElementById('monthPicker') || {}).value || '';
+  const haveMonths = Object.keys(revByMonth).filter(k => revByMonth[k]).sort();
+  const monTag = haveMonths.indexOf(wanted) >= 0 ? wanted : (haveMonths[haveMonths.length - 1] || '');
+  const revNow = monTag ? (revByMonth[monTag] || {}) : {};
+  const monthMismatch = wanted && monTag && wanted !== monTag;
+  let oldBookmark = false;
+  if (useCrmRevenue()) {
+    Object.keys(revByMonth).forEach(ym => {
+      const acc = revByMonth[ym];
+      if (!acc) return;
+      const m = {};
+      let oldFmt = false;   // данные без поля «абонемент» — со старой версии закладки
+      Object.keys(acc).forEach(name => {
+        const i = bbMatch(name), cell = acc[name];
+        if (i < 0 || !cell) return;                     // отработки/консультации в калькуляторе нет — не берём
+        let rub = null;
+        // Выручка = АБОНЕМЕНТЫ: ребёнок на весь месяц — 8 уроков × его цена (со скидкой семьи),
+        // пришёл/ушёл/переведён в середине — по фактическим урокам. От числа уроков в месяце не зависит.
+        if (cell[4] != null && !isNaN(+cell[4])) rub = +cell[4];
+        else if (cell[0] != null && !isNaN(+cell[0])) { rub = +cell[0]; oldFmt = true; }   // старая закладка: по урокам
+        else if (cell[3] && typeof cell[3] === 'object') {   // запасной: тариф × скидка % каждого ученика
+          rub = 0;
+          Object.entries(cell[3]).forEach(([pc, cnt]) => { rub += TARIFF[GROUPS[i].dur] * (1 - (+pc) / 100) * (+cnt); });
+          rub = Math.round(rub);
+        }
+        if (rub !== null) m[i] = (m[i] || 0) + rub;
+      });
+      state.crmOldM = state.crmOldM || {};
+      if (oldFmt) { state.crmOldM[ym] = true; oldBookmark = true; return; }   // старая закладка: считает по урокам — не берём
+      delete state.crmOldM[ym];
+      state.crmRevM[ym] = m;
+    });
+  }
+  list.forEach(item => {
+    const name = item.n || item.name, pupils = +(item.p !== undefined ? item.p : item.pupils);
+    const i = bbMatch(name);
+    if (i < 0) { unknown.push(name + ' · ' + pupils); return; }
+    touched.add(i);
+    const was = state.pupils[i] || 0;
+    crmPupils[i] = pupils;
+    if (was !== pupils) { state.pupils[i] = pupils; changed.push(GROUPS[i].name + ': ' + was + ' → ' + pupils); }
+    else same.push(GROUPS[i].name);
+    const rub = (state.crmRevM[monTag] || {})[i];
+    const cell = revNow[name];
+    if (useCrmRevenue() && rub != null) {
+      const full = pupils * TARIFF[GROUPS[i].dur];
+      const note = cell ? (cell[1] ? ', со скидкой: ' + cell[1] : '') + (cell[2] ? ', бесплатно: ' + cell[2] : '') : '';
+      money.push(GROUPS[i].name + ': ' + fmt(rub) + (full !== rub ? ' (без скидок ' + fmt(full) + ')' : '') + note);
+    }
+  });
+  if (oldBookmark) {
+    const n = document.createElement('div');
+    n.style.cssText = 'position:fixed;left:50%;top:14px;transform:translateX(-50%);z-index:9999;background:#E8740A;color:#fff;padding:12px 18px;border-radius:12px;font:700 13px var(--font);box-shadow:0 6px 20px rgba(0,0,0,.25);max-width:92vw;text-align:center';
+    n.innerHTML = '⚠️ Это СТАРАЯ закладка — она считает по урокам.<br>Выручку не тронула. Обнови страницу (⌘⇧R) и перетащи закладку заново из «⬇️ Из BigBen».';
+    document.body.appendChild(n); setTimeout(() => n.remove(), 15000);
+  }
+  if (Object.keys(crmPupils).length) state.crmPupils = crmPupils;   // актуальный состав из CRM — для всех месяцев учебного года
+  GROUPS.forEach((g, i) => { if (!touched.has(i)) missed.push(g.name); });
+  render();
+  localStorage.setItem('ss_salary_state', JSON.stringify(state));
+
+  const box = document.getElementById('bbReport');
+  if (box) {
+    const block = (title, arr, color, cnt) => arr.length
+      ? '<div style="margin-bottom:10px"><div style="font-size:12px;font-weight:700;color:' + color + '">' + title + ' (' + cnt + ')</div>' +
+        '<div style="font-size:12px;color:var(--gray-600);line-height:1.6">' + arr.join('<br>') + '</div></div>'
+      : '';
+    box.innerHTML =
+      '<div style="background:var(--purple-light);border-radius:12px;padding:12px 14px;margin-bottom:14px">' +
+      '<div style="font-size:13px;font-weight:700;color:var(--purple);margin-bottom:8px">Данные из BigBen · ' + list.length + ' групп' + (monTag ? ' · выручка за ' + monthName(monTag) : '') + '</div>' +
+      (monthMismatch ? '<div style="font-size:12px;color:#E8740A;margin-bottom:8px">В шапке выбран ' + monthName(wanted) + ', но данных за него в CRM нет — взял ' + monthName(monTag) + '.</div>' : '') +
+      block('Выручка из CRM, со скидками', money, 'var(--purple)', money.length) +
+      block('Изменилось', changed, 'var(--purple)', changed.length) +
+      block('Без изменений', [same.join(', ')].filter(x => x), 'var(--gray-600)', same.length) +
+      block('Нет в калькуляторе', unknown, '#E8740A', unknown.length) +
+      block('Не пришли из BigBen', [missed.join(', ')].filter(x => x), '#E8740A', missed.length) +
+      '</div>';
+  }
+  return changed.length;
+}
+
+const BB_SERVER = 'https://ss-bb.o-sintsova.workers.dev/data';
+
+// Обновление без компьютера: воркер сам ходит в BigBen и приносит те же данные
+async function bbServerRefresh() {
+  const input = document.getElementById('bbToken');
+  const msg = document.getElementById('bbServerMsg');
+  const btn = document.getElementById('bbServerBtn');
+  const token = (input.value || '').trim();
+  if (!token) { msg.style.color = 'var(--red, #c00)'; msg.textContent = 'Введи код доступа'; input.focus(); return; }
+  btn.disabled = true;
+  const was = btn.textContent;
+  btn.textContent = 'Гружу…';
+  msg.style.color = 'var(--gray-600)';
+  msg.textContent = 'Читаю последний снимок…';
+  try {
+    const stop = new AbortController();
+    const timer = setTimeout(() => stop.abort(), 150000);
+    let r;
+    try {
+      r = await fetch(BB_SERVER + '?t=' + encodeURIComponent(token), { cache: 'no-store', signal: stop.signal });
+    } catch (err) {
+      throw new Error(stop.signal.aborted
+        ? 'сервер не ответил за 2,5 минуты — похоже, мобильная сеть режет Cloudflare. Попробуй ещё раз, или обнови с компьютера через закладку'
+        : 'сеть не пустила запрос. Включи VPN и попробуй снова');
+    } finally {
+      clearTimeout(timer);
+    }
+    const d = await r.json();
+    if (!d.ok) throw new Error(d.error || 'сервер отказал');
+    localStorage.setItem('bbToken', token);
+    applyBigBen(d.list);
+    try { if (d.cash) localStorage.setItem('ss_cash', JSON.stringify(d.cash)); if (d.spent) localStorage.setItem('ss_spent', JSON.stringify(d.spent)); if (d.paidFor) localStorage.setItem('ss_paidfor', JSON.stringify(d.paidFor)); } catch(e) {}
+    fetchFinanceData();
+    fetchOtrSavings();
+    renderFinance();
+    if (d.cached && d.at) {
+      const dt = new Date(d.at);
+      const when = isNaN(dt) ? '' : dt.toLocaleString('ru-RU', { day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' });
+      msg.style.color = 'var(--gray-600)';
+      msg.textContent = 'Готово — снимок от ' + when + '. Обновляется автоматически раз в сутки.';
+    } else {
+      msg.style.color = 'var(--gray-600)';
+      msg.textContent = 'Готово — свежие данные из BigBen.';
+    }
+  } catch (e) {
+    msg.style.color = 'var(--red, #c00)';
+    msg.textContent = 'Не вышло: ' + (e.message || e);
+    if (/код не совпал/.test(String(e.message || e))) {
+      msg.innerHTML += ' — <a href="' + BB_SERVER.replace('/data', '/check') + '?t=' + encodeURIComponent(token) + '" target="_blank" style="color:inherit">проверить код</a>';
+    }
+  } finally {
+    btn.disabled = false;
+    btn.textContent = was;
+  }
+}
+
+function applyBigBenPaste() {
+  const raw = (document.getElementById('bbPaste').value || '').trim();
+  if (!raw) return;
+  try { applyBigBen(JSON.parse(raw)); }
+  catch (e) { alert('Не разобрал данные: ' + e.message); }
+}
+
+function monthName(ym) {
+  const M = ['январь','февраль','март','апрель','май','июнь','июль','август','сентябрь','октябрь','ноябрь','декабрь'];
+  const p = String(ym).split('-');
+  return M[+p[1] - 1] ? M[+p[1] - 1] + ' ' + p[0] : ym;
+}
+function useCrmRevenue() { return localStorage.getItem('ss_use_crm_rev') === '1'; }
+function toggleUseRev(on) {
+  localStorage.setItem('ss_use_crm_rev', on ? '1' : '0');
+  if (!on) { state.crmRev = {}; localStorage.setItem('ss_salary_state', JSON.stringify(state)); render(); }
+}
+function openBigBenModal() {
+  const saved = localStorage.getItem('bbToken');
+  const f = document.getElementById('bbToken');
+  if (f && saved && !f.value) f.value = saved;
+  document.getElementById('bigbenModal').classList.add('open');
+  const cb = document.getElementById('bbUseRev');
+  if (cb) cb.checked = useCrmRevenue();
+}
+function copyBookmarklet(btn) {
+  const href = document.getElementById('bbLink').getAttribute('href') || '';
+  navigator.clipboard.writeText(href).then(() => {
+    const was = btn.textContent;
+    btn.textContent = '✅ Скопировано';
+    setTimeout(() => btn.textContent = was, 2000);
+  });
+}
+function closeBigBenModal() { document.getElementById('bigbenModal').classList.remove('open'); }
+function closeBigBenOverlay(e) { if (e.target.id === 'bigbenModal') closeBigBenModal(); }
+
+// Закладка «💳 BigBen → оплаты»: обходит группы и счета учеников в браузере (серверу BigBen отдаёт
+// их слишком медленно) и открывает калькулятор с #pay=… ; калькулятор досылает данные на сервер.
+async function __payScan(target) {
+  try {
+    if (!location.host.includes('bigbencrm.ru')) { alert('Открой сначала BigBen: panel.bigbencrm.ru'); return; }
+    const note = document.createElement('div');
+    note.style.cssText = 'position:fixed;top:12px;right:12px;z-index:999999;background:#0EA5A0;color:#fff;padding:10px 14px;border-radius:12px;font:14px sans-serif';
+    document.body.appendChild(note);
+    const say = (t) => { note.textContent = '💳 ' + t; };
+    const P = async (u) => { const d = new DOMParser().parseFromString(await (await fetch(u, { credentials: 'include' })).text(), 'text/html'); d.querySelectorAll('script,style').forEach((x) => x.remove()); return d; };
+    const groups = {};
+    for (const f of ['current', 'future']) {
+      const gl = await P('/admin/index.php?obj=groups&filter=' + f);
+      gl.querySelectorAll('a').forEach((a) => { const m = (a.getAttribute('href') || '').match(/action=edit&group_id=(\d+)/); const t = a.textContent.replace(/\s+/g, ' ').trim(); if (m && t) groups[m[1]] = t; });
+    }
+    const gids = Object.keys(groups), pairs = [], roster = [];
+    for (let i = 0; i < gids.length; i++) {
+      say('группы ' + (i + 1) + '/' + gids.length);
+      const g = await P('/admin/index.php?obj=groups&action=edit&group_id=' + gids[i]);
+      const cap = ((g.querySelector('[name="groups[caption]"]') || {}).value || groups[gids[i]]).trim();
+      if (/консультац/i.test(cap)) continue;
+      const tb = [...g.querySelectorAll('table')].find((t) => /Оплачено до/.test(t.textContent));
+      const seen = new Set();
+      [...(tb ? tb.querySelectorAll('tbody tr') : [])].forEach((tr) => {
+        const c = [...tr.children];
+        const a = [...tr.querySelectorAll('a')].find((x) => /edituser&user_id=\d+/.test(x.getAttribute('href') || ''));
+        if (!a || c.length < 6) return;
+        const uid = a.getAttribute('href').match(/user_id=(\d+)/)[1];
+        if (seen.has(uid)) return; seen.add(uid);
+        const nm = a.textContent.replace(/\s+/g, ' ').replace(/\s*[А-ЯЁ][а-яё]+ \d+ балл.*$/, '').trim();
+        const ad = (c[5].textContent.match(/(\d{2})-(\d{2})-(\d{2})/) || []);
+        roster.push([cap, uid, nm, ad.length ? ('20' + ad[3] + '-' + ad[2] + '-' + ad[1]) : '']);
+        pairs.push([gids[i], cap, uid]);
+      });
+    }
+    const inv = [], ref = []; let k = 0;
+    const w = async () => {
+      while (k < pairs.length) {
+        const [gid, cap, uid] = pairs[k++];
+        say('счета ' + k + '/' + pairs.length);
+        try {
+          const d = await P('/admin/index.php?obj=groups&action=get_groups_user_payments&group_id=' + gid + '&user_id=' + uid);
+          const ts = d.querySelectorAll('table');
+          if (ts[0]) [...ts[0].querySelectorAll('tr')].slice(1).forEach((tr) => {
+            const c = [...tr.children]; if (c.length < 9) return;
+            const tx = (i) => c[i].textContent.replace(/\s+/g, ' ').trim();
+            if (!/^\S{1,4}-\d+/.test(tx(0))) return;
+            const st = tx(8);
+            // способ оплаты — выпадающий список в 7-й колонке, берём отмеченный вариант
+            const sel = c[6] ? c[6].querySelector('option[selected]') : null;
+            const way = sel ? sel.textContent.replace(/\s+/g, ' ').trim() : '';
+            inv.push([cap, uid, tx(2), tx(3), parseFloat(tx(5)) || 0, /^оплачено/i.test(st) ? 'p' : /^не оплачено/i.test(st) ? 'u' : 'o', (st.match(/\d{2}-\d{2}-\d{4}/) || [''])[0], /не выбран/i.test(way) ? '' : way]);
+          });
+          if (ts[1]) [...ts[1].querySelectorAll('tr')].slice(1).forEach((tr) => {
+            const c = [...tr.children].map((x) => x.textContent.replace(/\s+/g, ' ').trim());
+            if (c.length >= 6 && parseFloat(c[1]) > 0) ref.push([cap, uid, parseFloat(c[1]), c[5]]);
+          });
+        } catch (e) {}
+      }
+    };
+    await Promise.all([w(), w(), w(), w()]);
+    say('готово: ' + inv.length + ' счетов — открываю калькулятор');
+    window.open(target + '#pay=' + btoa(unescape(encodeURIComponent(JSON.stringify({ at: new Date().toISOString(), pairs: pairs.length, inv, ref, roster })))), '_blank');
+  } catch (e) { alert('Ошибка: ' + e.message); }
+}
+(function buildPayBookmarklet() {
+  const LIVE = 'https://osintsova-dot.github.io/Salary-calculator-/';
+  const target = /^https?:\/\/(127\.|localhost)/.test(location.href) || location.protocol === 'file:' ? LIVE : (location.origin + location.pathname);
+  const a = document.getElementById('bbPayLink');
+  if (a) a.setAttribute('href', 'javascript:' + encodeURIComponent('(' + __payScan.toString() + ')(' + JSON.stringify(target) + ')'));
+})();
+// Приехали оплаты ссылкой — сохраняем, досылаем на сервер (для телефона), пересчитываем
+(function importPayFromHash() {
+  const m = (location.hash || '').match(/^#pay=(.+)$/);
+  if (!m) return;
+  try {
+    const data = JSON.parse(decodeURIComponent(escape(atob(m[1]))));
+    history.replaceState(null, '', location.pathname);
+    window.__payFromHash = true;
+    localStorage.setItem('ss_pay', JSON.stringify(data));
+    render();
+    const token = localStorage.getItem('bbToken') || '';
+    if (token) fetch('https://ss-bb.o-sintsova.workers.dev/pay-data?t=' + encodeURIComponent(token), {
+      method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(data),
+    }).then(r => r.json()).then(d => { payToast(d && d.ok ? '✅ Оплаты загружены: ' + data.inv.length + ' счетов · отправлено на сервер, телефон обновится' : '⚠️ Оплаты применены, но на сервер не отправились'); })
+      .catch(() => payToast('⚠️ Оплаты применены, но на сервер не отправились'));
+    else payToast('✅ Оплаты загружены: ' + data.inv.length + ' счетов');
+  } catch (e) { payToast('⚠️ Не смог прочитать оплаты из ссылки: ' + e.message); }
+  function payToast(t) {
+    const n = document.createElement('div');
+    n.style.cssText = 'position:fixed;left:50%;top:14px;transform:translateX(-50%);z-index:9999;background:#0EA5A0;color:#fff;padding:10px 16px;border-radius:12px;font:600 13px var(--font);box-shadow:0 6px 20px rgba(0,0,0,.2);max-width:90vw';
+    n.textContent = t; document.body.appendChild(n); setTimeout(() => n.remove(), 7000);
+  }
+})();
+
+// Ссылка-закладка: собираем javascript: URL один раз при загрузке
+(function buildBookmarklet() {
+  // адрес всегда боевой: закладку могли перетащить с локальной копии
+  const LIVE = 'https://osintsova-dot.github.io/Salary-calculator-/';
+  const target = /^https?:\/\/(127\.|localhost)/.test(location.href) ? LIVE : (location.origin + location.pathname);
+  const code = "(async()=>{try{" +
+    "if(!location.host.includes('bigbencrm.ru')){alert('\\u041e\\u0442\\u043a\\u0440\\u043e\\u0439 \\u0441\\u043d\\u0430\\u0447\\u0430\\u043b\\u0430 BigBen: panel.bigbencrm.ru');return;}" +
+    // 1. состав групп
+    "const grab=async(f)=>{const r=await fetch('/admin/index.php?obj=groups&filter='+f,{credentials:'include'});" +
+    "const d=new DOMParser().parseFromString(await r.text(),'text/html');const o=[];" +
+    "d.querySelectorAll('table tr').forEach(tr=>{const c=tr.children;if(c.length<3)return;" +
+    "const m=(c[0].textContent||'').replace(/\\s+/g,' ').trim().match(/^(.*?)\\s*\\u0441\\u0442\\u0443\\u0434\\u0435\\u043d\\u0442\\u044b:\\s*(\\d+)/i);if(!m)return;" +
+    "o.push({n:m[1].trim(),p:+m[2],t:(c[1].textContent||'').replace(/\\s+/g,' ').trim()})});return o};" +
+    "const cur=await grab('current'),fut=await grab('future');const map={};" +
+    "[].concat(fut,cur).forEach(g=>{map[g.n]=g});" +
+    // 2. выручка за текущий и соседние месяцы: отчёт 4 (почасовые) и 7 (абонементы)
+    "const nw=new Date(),y=nw.getFullYear(),mo=nw.getMonth();" +
+    "const pad=n=>String(n).padStart(2,'0');const ds=d=>d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate());" +
+    "const rev={};" +
+    "for(var k=-1;k<=1;k++){const a=new Date(y,mo+k,1),b=new Date(y,mo+k+1,0);const key=a.getFullYear()+'-'+pad(a.getMonth()+1);" +
+    "const acc={};" +
+    "for(var ri=0;ri<2;ri++){const rid=ri?7:4;" +
+    "const q=await fetch('/admin/index.php?obj=reportmain&action=list&report_type_id='+rid+'&filial_id=0&period_start='+ds(a)+'&period_end='+ds(b),{credentials:'include'});" +
+    "const dd=new DOMParser().parseFromString(await q.text(),'text/html');let cg=null,gh=0;" +
+    "dd.querySelectorAll('table').forEach(t=>{const rows=[].slice.call(t.querySelectorAll('tr'));" +
+    "const hd=(rows[0]?rows[0].textContent:'').replace(/\\s+/g,' ').trim();" +
+    "if(/^\\u0413\\u0440\\u0443\\u043f\\u043f\\u0430/.test(hd)){const c=rows[1]?[].slice.call(rows[1].children).map(x=>x.textContent.replace(/\\s+/g,' ').trim()):[];cg=c[0]||null;gh=parseFloat(c[1]||'0')||0;return;}" +
+    "if(/\\u041a \\u043e\\u043f\\u043b\\u0430\\u0442\\u0435, \\u0440\\u0443\\u0431/.test(hd)&&cg){var rv=0,dc=0,fr=0,any=0,pcts={},ab=0;" +
+    "rows.slice(1).forEach(tr=>{const c=[].slice.call(tr.children).map(x=>x.textContent.replace(/\\s+/g,' ').trim());" +
+    "if(c.length<8||!/^\\d+$/.test(c[0]))return;any=1;const base=parseFloat(c[4]||'0'),ind=parseFloat(c[5]||'0'),sum=parseFloat((c[7]||'0').replace(',','.'));" +
+    "rv+=isNaN(sum)?0:sum;const h=parseFloat(c[6]||'0');ab+=(gh>0&&h>=gh)?Math.round(8*(c[5]===''?base:ind)):(isNaN(sum)?0:sum);if(ind===0)fr++;else if(ind<base-0.001)dc++;var pc=base>0?Math.round((1-ind/base)*100):0;pcts[pc]=(pcts[pc]||0)+1;});" +
+    "if(any){const o=acc[cg];acc[cg]=o?[o[0]+Math.round(rv),o[1]+dc,o[2]+fr,o[3],o[4]+Math.round(ab)]:[Math.round(rv),dc,fr,pcts,Math.round(ab)];}}});}" +
+    "if(Object.keys(acc).length)rev[key]=acc;}" +
+    "const all=Object.values(map);" +
+    "if(!all.length){alert('\\u0413\\u0440\\u0443\\u043f\\u043f\\u044b \\u043d\\u0435 \\u043d\\u0430\\u0439\\u0434\\u0435\\u043d\\u044b');return;}" +
+    "all.push({rev:rev});" +
+    "window.open('" + target + "#bb='+btoa(unescape(encodeURIComponent(JSON.stringify(all)))),'_blank');" +
+    "}catch(e){alert('\\u041e\\u0448\\u0438\\u0431\\u043a\\u0430: '+e.message)}})()";
+  const a = document.getElementById('bbLink');
+  if (a) a.setAttribute('href', 'javascript:' + encodeURIComponent(code));
+})();
+
+// Приехали данные ссылкой — применяем сразу
+(function importFromHash() {
+  const m = (location.hash || '').match(/^#bb=(.+)$/);
+  if (!m) return;
+  try {
+    const list = JSON.parse(decodeURIComponent(escape(atob(m[1]))));
+    history.replaceState(null, '', location.pathname);
+    window.__bbFromHash = true;
+    openBigBenModal();
+    applyBigBen(list);
+    // Досылаем снимок на сервер, чтобы ТЕЛЕФОН увидел свежую выручку.
+    // BigBen после 14.09 не отдаёт отчёт серверу напрямую (заглушка), а браузеру —
+    // отдаёт; поэтому именно закладка — источник, а сервер лишь хранит для телефона.
+    const token = localStorage.getItem('bbToken') || '';
+    if (token) {
+      fetch(BB_SERVER + '?t=' + encodeURIComponent(token), {
+        method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(list),
+      }).then(r => r.json()).then(d => {
+        const box = document.getElementById('bbServerNote');
+        if (box) box.textContent = d && d.ok ? '✅ Отправлено на сервер — телефон обновится' : '⚠️ На сервер не отправилось (данные в калькуляторе применены)';
+      }).catch(() => {
+        const box = document.getElementById('bbServerNote');
+        if (box) box.textContent = '⚠️ На сервер не отправилось (данные в калькуляторе применены)';
+      });
+    }
+  } catch (e) { alert('Не смог прочитать данные из ссылки: ' + e.message); }
+})();
+
+
+// ===================== ЛИЧНЫЙ БЮДЖЕТ =====================
+let personalState = JSON.parse(localStorage.getItem('ss_personal') || '{}');
+function savePersonal() { localStorage.setItem('ss_personal', JSON.stringify(personalState)); }
+const P_DEFAULTS = {
+  income: [{ name: 'Аренда квартиры 1', sum: 0 }, { name: 'Аренда квартиры 2', sum: 0 }, { name: 'Возврат долга', sum: 0 }, { name: 'Перевод мужа', sum: 0 }],
+  fixed:  [{ name: 'Продукты', sum: 0 }, { name: 'Семья (мама, брат)', sum: 0 }, { name: 'Дом, коммуналка', sum: 0 }, { name: 'Дети', sum: 0 }, { name: 'Транспорт', sum: 0 }],
+  var:    [{ name: 'Кафе, досуг', sum: 0 }, { name: 'Одежда', sum: 0 }, { name: 'Здоровье', sum: 0 }, { name: 'Разное', sum: 0 }],
+};
+function pMonth() {
+  const ym = (picker && picker.value) || '';
+  if (!personalState[ym]) personalState[ym] = JSON.parse(JSON.stringify(P_DEFAULTS));
+  return personalState[ym];
+}
+function pSum(arr) { return (arr || []).reduce((a, r) => a + (+r.sum || 0), 0); }
+function pAddRow(cat) {
+  const m = pMonth();
+  const name = prompt('Название статьи:', '');
+  if (name === null) return;
+  m[cat].push({ name: name.trim() || 'Без названия', sum: 0 });
+  savePersonal(); renderPersonal();
+}
+function pRenameRow(cat, i, val) { pMonth()[cat][i].name = val; savePersonal(); }
+function pSumRow(cat, i, val) {
+  const n = parseInt(String(val).replace(/[^0-9]/g, ''), 10);
+  pMonth()[cat][i].sum = isNaN(n) ? 0 : n;
+  savePersonal(); renderPersonal();
+}
+function pDelRow(cat, i) { pMonth()[cat].splice(i, 1); savePersonal(); renderPersonal(); }
+
+function pRowsHtml(cat, arr) {
+  return arr.map(function (r, i) {
+    return '<div class="p-row">'
+      + '<input class="p-name" value="' + (r.name || '').replace(/"/g, '&quot;') + '" onchange="pRenameRow(\'' + cat + '\',' + i + ',this.value)">'
+      + '<input class="p-sum" inputmode="numeric" value="' + (r.sum ? fmt(r.sum).replace(' ₽', '') : '') + '" placeholder="0" onchange="pSumRow(\'' + cat + '\',' + i + ',this.value)">'
+      + '<button class="p-del" title="Удалить" onclick="pDelRow(\'' + cat + '\',' + i + ')">✕</button></div>';
+  }).join('');
+}
+
+function esc(x){return String(x==null?'':x).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));}
+function familyCode(){ return (localStorage.getItem('ss_family_code')||'').trim(); }
+function setFamilyCode(){
+  const v=prompt('Код семьи (тот же, что в приложении «Бюджет семьи»):', familyCode());
+  if(v===null) return;
+  if(!v.trim()) return;
+  localStorage.setItem('ss_family_code', v.trim());
+  localStorage.setItem('ss_send_school','1');   // включаем автоотправку Школы
+  famLast={};
+  render();
+}
+function unlinkSchool(){ localStorage.setItem('ss_send_school','0'); render(); }
+function schoolLinkOn(){ return localStorage.getItem('ss_send_school')==='1'; }
+function pushSchoolToFamily(ym, sum){
+  if(!schoolLinkOn()) return;            // связь выключена — Школу вводят вручную
+  const code=familyCode(); if(!code) return;
+  if(famLast[ym]===sum) return;
+  clearTimeout(famTimer);
+  famTimer=setTimeout(()=>{
+    famLast[ym]=sum;
+    fetch(FAMILY_SYNC+'?code='+encodeURIComponent(code),{method:'POST',headers:{'content-type':'application/json'},
+      body:JSON.stringify({entries:[{id:'school-'+ym,month:ym,kind:'income',name:'🏫 Школа',sum:sum,by:'Оксана',ts:Date.now()}]})})
+      .then(()=>{ const el=document.getElementById('famNote'); if(el) el.textContent='отправлено в Бюджет семьи ✓'; })
+      .catch(()=>{ const el=document.getElementById('famNote'); if(el) el.textContent='не ушло — проверь связь'; });
+  },1200);
+}
+
+function renderPersonal() {
+  const m = pMonth();
+  const free = Math.max(0, window.__freeCash || 0);
+  const incomeExtra = pSum(m.income);
+  const income = free + incomeExtra;
+  const fixed = pSum(m.fixed);
+  const varr = pSum(m.var);
+  const spent = fixed + varr;
+  const left = income - spent;
+
+  document.getElementById('pFree').textContent = fmt(free);
+  document.getElementById('pIncomeRows').innerHTML = pRowsHtml('income', m.income);
+  document.getElementById('pIncomeTotal').textContent = fmt(income);
+  document.getElementById('pFixedRows').innerHTML = pRowsHtml('fixed', m.fixed);
+  document.getElementById('pVarRows').innerHTML = pRowsHtml('var', m.var);
+  document.getElementById('pFixedTotal').textContent = fmt(fixed);
+  document.getElementById('pVarTotal').textContent = fmt(varr);
+
+  document.getElementById('pIncome').textContent = fmt(income);
+  document.getElementById('pSpent').textContent = fmt(spent);
+  document.getElementById('pSpentSub').textContent = 'обязательное ' + fmt(fixed) + ' + переменное ' + fmt(varr);
+  const lf = document.getElementById('pLeft');
+  lf.textContent = fmt(left);
+  lf.className = 'card-value ' + (left >= 0 ? 'green' : '');
+  lf.style.color = left >= 0 ? '' : 'var(--red, #c00)';
+  document.getElementById('pLeftSub').textContent = left >= 0 ? 'можно потратить или отложить' : 'перерасход — ужми переменное';
+}
+
+function switchTab(name) {
+  const salary = name === 'salary';
+  document.getElementById('tab-salary').hidden = !salary;
+  document.getElementById('tab-personal').hidden = salary;
+  document.getElementById('tabBtnSalary').classList.toggle('active', salary);
+  document.getElementById('tabBtnPersonal').classList.toggle('active', !salary);
+  localStorage.setItem('ss_active_tab', name);
+  if (!salary) renderPersonal();
+}
+// восстановить выбранную вкладку
+
