@@ -59,3 +59,9 @@ body .legacy-content .deposit-block.collapsible-finance{flex-wrap:wrap;padding:0
 .deposit-block.collapsible-finance>div{padding:20px;flex:1 1 180px}
 body[data-view=admin] #fixed-payments>.finance-toggle{display:none}
 @media(prefers-reduced-motion:reduce){.finance-toggle::after{transition:none}}
+
+.sidebar{overflow-y:auto;overscroll-behavior:contain;height:100dvh;padding-bottom:18px;scrollbar-width:thin}
+.sidebar>*{flex-shrink:0}
+.student-shortcuts{display:flex;flex-wrap:wrap;gap:10px;margin:18px 0}
+.student-shortcuts a{display:inline-flex;align-items:center;gap:8px;border:1px solid var(--border);border-radius:9px;padding:10px 14px;background:white;color:var(--purple);font-size:12px;font-weight:650;min-height:44px}
+.student-shortcuts a:hover{background:var(--purple-light)}
