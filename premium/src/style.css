@@ -65,3 +65,9 @@ body[data-view=admin] #fixed-payments>.finance-toggle{display:none}
 .student-shortcuts{display:flex;flex-wrap:wrap;gap:10px;margin:18px 0}
 .student-shortcuts a{display:inline-flex;align-items:center;gap:8px;border:1px solid var(--border);border-radius:9px;padding:10px 14px;background:white;color:var(--purple);font-size:12px;font-weight:650;min-height:44px}
 .student-shortcuts a:hover{background:var(--purple-light)}
+
+/* пояснения под фактическими суммами: чем платили и из чего сложился долг */
+.fact-item{align-items:flex-start}
+.fact-item .status-icon{margin-top:2px}
+.fact-sub{display:block;font-style:normal;font-size:9px;line-height:1.5;color:#8d8499;margin-top:3px}
+@media(min-width:1001px){.fact-sub{font-size:10px}}
