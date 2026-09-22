@@ -643,6 +643,9 @@ function renderCash(t) {
     html += row('Остаётся после ЗП', (expected != null ? 'если оплатят всё ожидаемое · по уже пришедшему: ' + fmt(came - salaries) : (left1 >= 0 ? 'на зарплаты хватает' : 'на зарплаты не хватает')), fmt(left1), left1 >= 0 ? 'var(--green)' : 'var(--red)');
     html += row('Прочие выплаты месяца', 'аренда, уборка, SMM, налоги, расходы, кредиты (депозит остаётся в школе)', '−' + fmt(other), 'var(--red)');
     const left2 = left1 - other;
+    html += row('Фонд лета — отложить', (t.summerPct || 0) + '% с поступлений · копим на лето, когда оплат нет', '−' + fmt(t.summer || 0), 'var(--red)');
+    html += row('Можно взять себе', 'моя ЗП педагога ' + fmt(t.owner || 0) + ' возвращается — это тоже мои деньги',
+      fmt(left2 - (t.summer || 0) + (t.owner || 0)), (left2 - (t.summer || 0) + (t.owner || 0)) >= 0 ? 'var(--green)' : 'var(--red)');
     html += row('Остаётся после всех выплат', (m === 5 ? 'ЗП за май — из оплат за сентябрь (до 10.06 по договору) · ' : '') + (expected != null ? 'если оплатят всё ожидаемое · по уже пришедшему: ' + fmt(came - salaries - other) : ''), fmt(left2), left2 >= 0 ? 'var(--green)' : 'var(--red)');
   }
   document.getElementById('cashBody').innerHTML = html;
@@ -651,10 +654,16 @@ function renderCash(t) {
   if (cl) {
     if (m >= 6 && m <= 8) { cl.textContent = '—'; if (cls) cls.textContent = 'летом зарплат нет'; }
     else {
-      const base2 = (expected != null ? expected : came), left2v = base2 - salaries - other;
-      cl.textContent = fmt(left2v);
-      if (cls) cls.textContent = 'ЗП за ' + monthNames[m - 1] + ' — из оплат за ' + srcName.toLowerCase()
-        + (expected != null ? ' · по уже пришедшему ' + fmt(came - salaries - other) : '');
+      if (expected == null) {          // счета месяца-источника ещё не выставлены — считать не из чего
+        cl.textContent = '—';
+        if (cls) cls.textContent = 'счета за ' + srcName.toLowerCase() + ' ещё не выставлены';
+      } else {
+        const takeable = expected - salaries - other - (t.summer || 0) + (t.owner || 0);   // минус фонд лета, плюс моя ЗП педагога
+        cl.textContent = fmt(takeable);
+        if (cls) cls.textContent = 'поступления за ' + srcName.toLowerCase() + ' − ЗП за ' + monthNames[m - 1]
+          + ' − обязательства − фонд лета · по уже пришедшему '
+          + fmt(came - salaries - other - (t.summer || 0) + (t.owner || 0));
+      }
     }
   }
   const at = pb.at ? new Date(pb.at).toLocaleString('ru-RU', { day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' }) : '';
@@ -1135,7 +1144,7 @@ function render() {
     tbody.appendChild(sumTr);
   });
 
-  renderCash({ hands: totalHands, admin: adminPay, otr: otrabotkiPay, fixed: fixedTotal, deposit: totalDeposit });
+  renderCash({ hands: totalHands, admin: adminPay, otr: otrabotkiPay, fixed: fixedTotal, deposit: totalDeposit, summer: sumActual, owner: ownerHands, summerPct: sumPct });
 
   // Save current state
   localStorage.setItem('ss_salary_state', JSON.stringify(state));
