@@ -643,10 +643,13 @@ function renderCash(t) {
     html += row('Остаётся после ЗП', (expected != null ? 'если оплатят всё ожидаемое · по уже пришедшему: ' + fmt(came - salaries) : (left1 >= 0 ? 'на зарплаты хватает' : 'на зарплаты не хватает')), fmt(left1), left1 >= 0 ? 'var(--green)' : 'var(--red)');
     html += row('Прочие выплаты месяца', 'аренда, уборка, SMM, налоги, расходы, кредиты (депозит остаётся в школе)', '−' + fmt(other), 'var(--red)');
     const left2 = left1 - other;
+    html += row('Депозит на отпускные — отложить', 'остаётся в школе под летние выплаты педагогам', '−' + fmt(t.deposit || 0), 'var(--red)');
     html += row('Фонд лета — отложить', (t.summerPct || 0) + '% с поступлений · копим на лето, когда оплат нет', '−' + fmt(t.summer || 0), 'var(--red)');
-    html += row('Можно взять себе', 'моя ЗП педагога ' + fmt(t.owner || 0) + ' возвращается — это тоже мои деньги',
-      fmt(left2 - (t.summer || 0) + (t.owner || 0)), (left2 - (t.summer || 0) + (t.owner || 0)) >= 0 ? 'var(--green)' : 'var(--red)');
-    html += row('Остаётся после всех выплат', (m === 5 ? 'ЗП за май — из оплат за сентябрь (до 10.06 по договору) · ' : '') + (expected != null ? 'если оплатят всё ожидаемое · по уже пришедшему: ' + fmt(came - salaries - other) : ''), fmt(left2), left2 >= 0 ? 'var(--green)' : 'var(--red)');
+    const take = left2 - (t.deposit || 0) - (t.summer || 0) + (t.owner || 0);
+    html += row('Можно взять себе', (m === 5 ? 'ЗП за май — из оплат за сентябрь (до 10.06 по договору) · ' : '')
+      + 'моя ЗП педагога ' + fmt(t.owner || 0) + ' возвращается — это тоже мои деньги'
+      + (expected != null ? ' · по уже пришедшему ' + fmt(came - salaries - other - (t.deposit || 0) - (t.summer || 0) + (t.owner || 0)) : ''),
+      fmt(take), take >= 0 ? 'var(--green)' : 'var(--red)');
   }
   document.getElementById('cashBody').innerHTML = html;
   // те же числа отдельными полями — их показывает кабинет на главном экране
@@ -660,14 +663,14 @@ function renderCash(t) {
         const fs0 = document.getElementById('freeSub');   // «Свободно на руки» остаётся по начислениям — честно об этом пишем
         if (fs0) fs0.textContent = 'по начислениям месяца — счета за ' + srcName.toLowerCase() + ' ещё не выставлены';
       } else {
-        const takeable = expected - salaries - other - (t.summer || 0) + (t.owner || 0);   // минус фонд лета, плюс моя ЗП педагога
+        const takeable = expected - salaries - other - (t.deposit || 0) - (t.summer || 0) + (t.owner || 0);
         cl.textContent = fmt(takeable);
         if (cls) cls.textContent = 'поступления за ' + srcName.toLowerCase() + ' − ЗП за ' + monthNames[m - 1]
-          + ' − обязательства − фонд лета · по уже пришедшему '
-          + fmt(came - salaries - other - (t.summer || 0) + (t.owner || 0));
+          + ' − обязательства − депозит − фонд лета · по уже пришедшему '
+          + fmt(came - salaries - other - (t.deposit || 0) - (t.summer || 0) + (t.owner || 0));
         // «Свободно на руки» — то же самое, но ещё и за вычетом депозита на отпускные:
         // это деньги, которые реально можно тратить, а не те, что лежат в школе под будущие выплаты.
-        const spendable = takeable - (t.deposit || 0);
+        const spendable = takeable;                 // одна и та же сумма: карточка и строка «Можно взять себе»
         const fa = document.getElementById('freeAmt'), fs = document.getElementById('freeSub');
         if (fa) { fa.textContent = fmt(spendable); fa.style.color = spendable >= 0 ? 'var(--green)' : 'var(--red)'; }
         if (fs) fs.textContent = 'по кассе: поступления за ' + srcName.toLowerCase()
