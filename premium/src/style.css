@@ -71,3 +71,32 @@ body[data-view=admin] #fixed-payments>.finance-toggle{display:none}
 .fact-item .status-icon{margin-top:2px}
 .fact-sub{display:block;font-style:normal;font-size:9px;line-height:1.5;color:#8d8499;margin-top:3px}
 @media(min-width:1001px){.fact-sub{font-size:10px}}
+
+/* Свёрнутое меню: на широком экране видны только значки, подписи — при наведении.
+   Так вся картина месяца помещается на экран, а меню не занимает четверть ширины. */
+@media(min-width:1001px){
+  :root{--sidebar:74px}
+  .sidebar{width:74px;padding-inline:12px;overflow:hidden;transition:width .16s ease}
+  .sidebar:hover,.sidebar:focus-within{width:236px;padding-inline:17px;box-shadow:0 8px 30px rgba(38,26,60,.13)}
+  .sidebar.collapsed-view{}
+  .sidebar:not(:hover):not(:focus-within) .nav-item,
+  .sidebar:not(:hover):not(:focus-within) .profile,
+  .sidebar:not(:hover):not(:focus-within) .workspace-label{font-size:0}
+  .sidebar:not(:hover):not(:focus-within) .nav-caption,
+  .sidebar:not(:hover):not(:focus-within) .sidebar-note,
+  .sidebar:not(:hover):not(:focus-within) .workspace-label>div,
+  .sidebar:not(:hover):not(:focus-within) .workspace-label .live-dot,
+  .sidebar:not(:hover):not(:focus-within) .profile>div,
+  .sidebar:not(:hover):not(:focus-within) .brand>span:last-child,
+  .sidebar:not(:hover):not(:focus-within) .nav-dot{display:none}
+  .sidebar:not(:hover):not(:focus-within) .brand{margin-inline:0;justify-content:center;font-size:19px}
+  .sidebar:not(:hover):not(:focus-within) .nav-item{justify-content:center;padding-inline:0;gap:0}
+  .sidebar:not(:hover):not(:focus-within) .workspace-label{justify-content:center;padding-inline:0}
+  .sidebar:not(:hover):not(:focus-within) .profile{justify-content:center}
+  .sidebar:not(:hover):not(:focus-within) .avatar{font-size:11px}
+  .sidebar:not(:hover):not(:focus-within) svg{width:19px;height:19px;flex:none}
+}
+
+/* в полосе фактов теперь четыре суммы + пояснение */
+.fact-strip{grid-template-columns:1fr 1fr 1fr 1fr 1.1fr}
+@media(max-width:720px){.fact-strip{grid-template-columns:1fr 1fr}.fact-item:nth-child(3){border-right:1px solid var(--border)}.fact-item:nth-child(4){border-right:0}}

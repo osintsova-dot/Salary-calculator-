@@ -34,6 +34,37 @@ input[type=month],input[type=date]{font-family:var(--font);font-size:13px;paddin
 .gate[hidden]{display:none}   /* иначе display:grid перебивает hidden и форма кода висит над списком */
 .gate input{padding:10px;border:1.5px solid var(--line);border-radius:10px;font-size:15px;text-align:center}
 .foot{font-size:11px;color:var(--mut);text-align:center;padding:14px}
+.tabs{display:flex;gap:8px;padding:12px 12px 0;max-width:900px;margin:0 auto}
+.tabs button{flex:1;border:1.5px solid var(--line);background:#fff;color:var(--mut);border-radius:12px 12px 0 0;padding:11px 8px;font-weight:700;font-size:13px;cursor:pointer}
+.tabs button.on{background:var(--purple);border-color:var(--purple);color:#fff}
+.tiles{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;padding:12px 14px}
+.tile{background:#fff;border:1px solid var(--line);border-radius:12px;padding:10px 11px}
+.tile .k{font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:var(--mut);font-weight:700}
+.tile .v{font-size:20px;font-weight:800;font-family:var(--mono);margin-top:3px}
+.tile.ok .v{color:var(--green)} .tile.acc .v{color:var(--purple)}
+.chips{display:flex;gap:7px;flex-wrap:wrap;padding:0 14px 10px}
+.chip{border:1px solid var(--line);background:#fff;color:var(--mut);border-radius:999px;padding:6px 12px;font-size:12.5px;font-weight:600;cursor:pointer}
+.chip.on{background:var(--purple);border-color:var(--purple);color:#fff}
+.chip.kl.on{background:var(--org);border-color:var(--org);color:#fff}
+.srch{width:calc(100% - 28px);margin:0 14px 10px;border:1.5px solid var(--line);border-radius:12px;padding:10px 12px;font-size:15px;font-family:var(--font)}
+.lead{background:#fff;border:1px solid var(--line);border-radius:14px;padding:11px 13px;margin:0 14px 9px;display:flex;flex-direction:column;gap:8px}
+.lead.done{opacity:.5}
+.lead .top{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap}
+.lead .phone{font-family:var(--mono);font-size:14px;color:var(--purple);font-weight:600}
+.lead .date{margin-left:auto;font-size:12px;color:var(--mut);font-family:var(--mono)}
+.acts{display:flex;gap:7px;flex-wrap:wrap;align-items:center}
+.abtn{display:inline-flex;align-items:center;gap:5px;text-decoration:none;font-size:13px;font-weight:700;border-radius:10px;padding:7px 12px;border:1px solid var(--line);color:#1b1b23;background:#fff}
+.abtn.call{background:var(--purple);border-color:var(--purple);color:#fff}
+.abtn.wa{background:#25D366;border-color:#25D366;color:#0a2e17}
+.abtn.st{font-size:12px;padding:6px 10px}
+.abtn.st.on{background:var(--purple);border-color:var(--purple);color:#fff}
+.script{background:#fff;border:1px solid var(--line);border-radius:14px;margin:0 14px 12px;overflow:hidden}
+.script summary{cursor:pointer;padding:12px 14px;font-weight:700;font-size:14px}
+.script .body{padding:0 14px 14px;border-top:1px solid var(--line);font-size:13.5px;line-height:1.55}
+.script h3{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--purple);margin:14px 0 4px}
+.say{background:#f3eefc;border-radius:9px;padding:7px 10px;margin:5px 0}
+.tpl{background:#fdf7e3;border:1px solid var(--yellow,#F5C842);border-radius:10px;padding:9px 11px;margin:6px 0;font-size:13px}
+.copy{margin-top:6px;border:1.5px solid var(--purple);background:#fff;color:var(--purple);border-radius:10px;padding:6px 12px;font-size:12.5px;font-weight:700;cursor:pointer}
 </style>
 <link rel="stylesheet" href="companion.css"/></head>
 <body>
@@ -46,10 +77,14 @@ input[type=month],input[type=date]{font-family:var(--font);font-size:13px;paddin
 
 <div id="app" hidden>
 <header>
-  <h1>🆕 Новенькие</h1>
+  <h1 id="ttl">🆕 Новенькие</h1>
   <div class="sub" id="stamp">…</div>
 </header>
-<div class="wrap">
+<div class="tabs">
+  <button id="tabN" class="on" onclick="showTab('N')">🆕 Новенькие</button>
+  <button id="tabL" onclick="showTab('L')">📞 Лиды</button>
+</div>
+<div class="wrap" id="paneN">
 
   <div class="card">
     <div class="tools">
@@ -66,6 +101,62 @@ input[type=month],input[type=date]{font-family:var(--font);font-size:13px;paddin
   <div class="foot">Дата регистрации — из выгрузки «Ученики» в CRM. Группы и оплаты — из закладки «💳 BigBen → оплаты».<br>
     Speak&amp;Smile · расчёт ЗП</div>
 </div>
+
+<div class="wrap" id="paneL" hidden>
+  <div class="tiles">
+    <div class="tile"><div class="k">Заявок</div><div class="v" id="tAll">0</div></div>
+    <div class="tile ok"><div class="k">Записались</div><div class="v" id="tZ">0</div></div>
+    <div class="tile"><div class="k">Не дошли</div><div class="v" id="tN">0</div></div>
+    <div class="tile acc"><div class="k">Конверсия</div><div class="v" id="tC">0%</div></div>
+  </div>
+
+  <details class="script">
+    <summary>📞 Что говорить по телефону</summary>
+    <div class="body">
+      <h3>1. Приветствие</h3>
+      <div class="say">«Здравствуйте! Это Наталья, школа английского Speak&amp;Smile, Норильск. Удобно сейчас пару минут?»</div>
+      <h3>2. Повод</h3>
+      <div class="say"><b>Осень:</b> «Вы недавно оставляли заявку на английский для ребёнка — звоню по ней, подобрать группу.»</div>
+      <div class="say"><b>Весна:</b> «Вы весной интересовались английским у нас. Идёт набор на новый год, места есть — актуально ещё?»</div>
+      <h3>3. Уточнить</h3>
+      <div>Для ребёнка какого класса подбираем? Английский учили — школа, репетитор, другая школа или с нуля?</div>
+      <h3>4. Суть</h3>
+      <div class="say">«Небольшие группы по уровню и возрасту, упор чтобы ребёнок <b>говорил</b>. Первый шаг — бесплатная диагностика: смотрим уровень, подбираем группу. Ни к чему не обязывает.»</div>
+      <h3>5. Цель звонка</h3>
+      <div class="say">«Запишу на диагностику? Есть [время А] или [время Б] — как удобнее?» — всегда выбор из двух.</div>
+      <h3>Возражения</h3>
+      <div><b>Дорого</b> → сначала бесплатная диагностика, потом варианты и рассрочка.<br>
+      <b>Нет времени</b> → подберём расписание, есть вечер и выходные; диагностика 30–40 минут один раз.<br>
+      <b>Уже занимаемся</b> → диагностика как второе мнение, бесплатно.<br>
+      <b>Подумаю</b> → мягко резервируем место, места расходятся.</div>
+      <h3>Не дозвонились → WhatsApp</h3>
+      <div class="tpl"><b>Осень</b><div id="waO"></div><button class="copy" onclick="copyText('waO',this)">Скопировать</button></div>
+      <div class="tpl"><b>Весна</b><div id="waV"></div><button class="copy" onclick="copyText('waV',this)">Скопировать</button></div>
+    </div>
+  </details>
+
+  <input class="srch" id="q" type="search" placeholder="Поиск по имени или телефону…" autocomplete="off">
+  <div class="chips" id="fchips">
+    <button class="chip on" data-f="ne">Не дошли</button>
+    <button class="chip" data-f="todo">Не обзвонены</button>
+    <button class="chip" data-f="осень">Осень</button>
+    <button class="chip" data-f="весна">Весна</button>
+    <button class="chip" data-f="z">Записались</button>
+    <button class="chip" data-f="all">Все</button>
+  </div>
+  <div class="chips" id="kchips">
+    <button class="chip kl on" data-k="all">Все классы</button>
+    <button class="chip kl" data-k="5-6 лет">🧸 5–6 лет</button>
+    <button class="chip kl" data-k="1-4 класс">1–4 класс</button>
+    <button class="chip kl" data-k="5-7 класс">5–7 класс</button>
+    <button class="chip kl" data-k="5-8 класс">5–8 класс</button>
+    <button class="chip kl" data-k="8-11 класс">8–11 класс</button>
+  </div>
+  <div class="stat" id="lcount"></div>
+  <div id="lbody"></div>
+  <div class="foot">Заявки с рекламы ВК, сверено с CRM по телефону. Отметки общие: их видят и Оксана, и Наталья.<br>
+    Speak&amp;Smile</div>
+</div>
 </div>
 
 <script>
@@ -77,6 +168,102 @@ function esc(x){return String(x==null?"":x).replace(/[&<>]/g,function(c){return 
 function fmtD(iso){if(!iso)return"";var p=iso.split("-");return p[2]+"."+p[1]+"."+p[0].slice(2);}
 function monthName(ym){var M=["январь","февраль","март","апрель","май","июнь","июль","август","сентябрь","октябрь","ноябрь","декабрь"];return M[+ym.slice(5,7)-1]+" "+ym.slice(0,4);}
 function saveCode(){var v=document.getElementById("code").value.trim();if(v){localStorage.setItem("bbToken",v);boot();}}
+// ─── ЛИДЫ (заявки с рекламы) ─────────────────────────────────────────────
+// Список лежит на сервере и отдаётся только по коду: телефоны родителей
+// в открытый репозиторий класть нельзя. Отметки тоже на сервере — общие.
+var LEADS=null, LMARKS={}, LF="ne", LK="all", LQ="";
+var LSTATES={call:"дозвонилась",no:"не дозвонилась",sign:"записала",refuse:"отказ"};
+function showTab(t){
+  var n=t==="N";
+  document.getElementById("paneN").hidden=!n;
+  document.getElementById("paneL").hidden=n;
+  document.getElementById("tabN").className=n?"on":"";
+  document.getElementById("tabL").className=n?"":"on";
+  document.getElementById("ttl").textContent=n?"🆕 Новенькие":"📞 Лиды";
+  if(!n&&!LEADS)loadLeads();
+}
+function loadLeads(){
+  document.getElementById("lbody").innerHTML='<div class="card"><div class="row">Загрузка…</div></div>';
+  fetch(WORKER+"/leads?t="+encodeURIComponent(token()),{cache:"no-store"})
+    .then(function(r){return r.json();})
+    .then(function(d){
+      LEADS=(d&&d.data)||null; LMARKS=(d&&d.marks)||{};
+      if(LEADS&&LEADS.texts){
+        document.getElementById("waO").textContent=LEADS.texts.wa_osen||"";
+        document.getElementById("waV").textContent=LEADS.texts.wa_vesna||"";
+      }
+      renderLeads();
+    })
+    .catch(function(){document.getElementById("lbody").innerHTML='<div class="card"><div class="row">Не удалось загрузить</div></div>';});
+}
+function markLead(phone,state){
+  if(LMARKS[phone]&&LMARKS[phone].state===state) state=null;       // повторное нажатие снимает
+  if(state) LMARKS[phone]={state:state}; else delete LMARKS[phone];
+  renderLeads();
+  fetch(WORKER+"/leads-mark?t="+encodeURIComponent(token()),{method:"POST",headers:{"content-type":"application/json"},
+    body:JSON.stringify({phone:phone,state:state})}).catch(function(){});
+}
+function fmtPhone(p){return "+7 "+p.slice(0,3)+" "+p.slice(3,6)+"-"+p.slice(6,8)+"-"+p.slice(8,10);}
+function fmtLeadDate(d){var p=d.split("-");var M=["янв","фев","мар","апр","мая","июн","июл","авг","сен","окт","ноя","дек"];
+  return (+p[2])+" "+M[+p[1]-1];}
+function copyText(id,btn){
+  var t=(document.getElementById(id)||{}).textContent||"";
+  var ok=function(){btn.textContent="Скопировано ✓";setTimeout(function(){btn.textContent="Скопировать";},1600);};
+  if(navigator.clipboard&&navigator.clipboard.writeText) navigator.clipboard.writeText(t).then(ok).catch(function(){});
+  else ok();
+}
+function leadPasses(x){
+  if(LQ){var q=LQ.toLowerCase();
+    if(!(x.n.toLowerCase().indexOf(q)>=0 || x.p.indexOf(q.replace(/\D/g,""))>=0)) return false;}
+  if(LK!=="all" && x.k!==LK) return false;
+  if(LF==="all") return true;
+  if(LF==="ne") return !x.z;
+  if(LF==="z") return x.z;
+  if(LF==="осень"||LF==="весна") return x.s===LF;
+  if(LF==="todo") return !x.z && !LMARKS[x.p];
+  return true;
+}
+function renderLeads(){
+  var body=document.getElementById("lbody");
+  if(!LEADS||!LEADS.list){body.innerHTML='<div class="card"><div class="row">Списка пока нет</div></div>';return;}
+  var all=LEADS.list, z=all.filter(function(x){return x.z;}).length;
+  document.getElementById("tAll").textContent=all.length;
+  document.getElementById("tZ").textContent=z;
+  document.getElementById("tN").textContent=all.length-z;
+  document.getElementById("tC").textContent=Math.round(100*z/all.length)+"%";
+  var items=all.filter(leadPasses);
+  document.getElementById("lcount").textContent=items.length+" из "+all.length+" · обзвонено "+Object.keys(LMARKS).length;
+  var html="";
+  items.forEach(function(x){
+    var m=LMARKS[x.p], st=m&&m.state;
+    var wa=(x.s==="осень"?(LEADS.texts&&LEADS.texts.wa_osen):(LEADS.texts&&LEADS.texts.wa_vesna))||"";
+    html+='<div class="lead'+(st?" done":"")+'">'+
+      '<div class="top"><span class="name">'+esc(x.n)+'</span>'+
+      '<span class="pill '+(x.s==="осень"?"warn":"ok")+'">'+x.s+'</span>'+
+      (x.k?'<span class="pill warn">'+esc(x.k)+'</span>':'')+
+      (x.z?'<span class="pill ok">записался</span>':'')+
+      (st?'<span class="pill ok">'+LSTATES[st]+'</span>':'')+
+      '<span class="date">'+fmtLeadDate(x.d)+'</span></div>'+
+      '<div class="phone">'+fmtPhone(x.p)+'</div>'+
+      '<div class="acts">'+
+        '<a class="abtn call" href="tel:+7'+x.p+'">☎ Позвонить</a>'+
+        '<a class="abtn wa" target="_blank" rel="noopener" href="https://wa.me/7'+x.p+'?text='+encodeURIComponent(wa)+'">WhatsApp</a>'+
+        '<button class="abtn st'+(st==="call"?" on":"")+'" onclick="markLead(\''+x.p+'\',\'call\')">дозвонилась</button>'+
+        '<button class="abtn st'+(st==="no"?" on":"")+'" onclick="markLead(\''+x.p+'\',\'no\')">не дозвонилась</button>'+
+        '<button class="abtn st'+(st==="sign"?" on":"")+'" onclick="markLead(\''+x.p+'\',\'sign\')">записала</button>'+
+        '<button class="abtn st'+(st==="refuse"?" on":"")+'" onclick="markLead(\''+x.p+'\',\'refuse\')">отказ</button>'+
+      '</div></div>';
+  });
+  body.innerHTML=html||'<div class="card"><div class="row">Ничего не найдено</div></div>';
+}
+document.addEventListener("click",function(e){
+  var c=e.target.closest&&e.target.closest("#fchips .chip");
+  if(c){LF=c.dataset.f;[].forEach.call(document.querySelectorAll("#fchips .chip"),function(b){b.classList.toggle("on",b===c);});renderLeads();return;}
+  var k=e.target.closest&&e.target.closest("#kchips .chip");
+  if(k){LK=k.dataset.k;[].forEach.call(document.querySelectorAll("#kchips .chip"),function(b){b.classList.toggle("on",b===k);});renderLeads();}
+});
+document.addEventListener("input",function(e){ if(e.target&&e.target.id==="q"){LQ=e.target.value.trim();renderLeads();} });
+
 function boot(){
   if(!token()){document.getElementById("gate").hidden=false;document.getElementById("app").hidden=true;return;}
   document.getElementById("gate").hidden=true;document.getElementById("app").hidden=false;load();

@@ -3,8 +3,10 @@ import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import vm from 'node:vm';
 const engine=readFileSync(new URL('../public/engine.js',import.meta.url),'utf8');
-const original=readFileSync(new URL('../../index.html',import.meta.url),'utf8').match(/<script>([\s\S]*?)<\/script>/)[1];
-test('Calculation engine is byte-for-byte identical to the existing application',()=>assert.equal(engine,original));
+// Раньше ядро лежало прямо в index.html; после редизайна оно вынесено в engine.js,
+// поэтому сверяем исходник с тем файлом, который реально уходит на сайт.
+const published=readFileSync(new URL('../../engine.js',import.meta.url),'utf8');
+test('Published engine matches the source file',()=>assert.equal(engine,published));
 const calc=engine.slice(engine.indexOf('function calcGroup('),engine.indexOf('// «За какой месяц»'));
 function calculate(overrides={}){const context={GROUPS:[{dur:60}],state:{pupils:{0:4}},TARIFF:{60:8000,90:10000},TEACHER_PCT:.25,DEPOSIT:2500,isActive:()=>true,monthCrm:()=>null,noShowGroup:()=>0,transferAdjGroup:()=>0,earlyGroup:()=>0,abonDiscGroup:()=>0,...overrides};vm.createContext(context);return JSON.parse(JSON.stringify(vm.runInContext(calc+';calcGroup(0)',context)))}
 test('60-minute group: revenue, payroll, deposit and take-home',()=>assert.deepEqual(calculate(),{revenue:32000,fot:8000,hands:5500,deposit:2500}));

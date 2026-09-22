@@ -646,6 +646,17 @@ function renderCash(t) {
     html += row('Остаётся после всех выплат', (m === 5 ? 'ЗП за май — из оплат за сентябрь (до 10.06 по договору) · ' : '') + (expected != null ? 'если оплатят всё ожидаемое · по уже пришедшему: ' + fmt(came - salaries - other) : ''), fmt(left2), left2 >= 0 ? 'var(--green)' : 'var(--red)');
   }
   document.getElementById('cashBody').innerHTML = html;
+  // те же числа отдельными полями — их показывает кабинет на главном экране
+  const cl = document.getElementById('cashLeft'), cls = document.getElementById('cashLeftSub');
+  if (cl) {
+    if (m >= 6 && m <= 8) { cl.textContent = '—'; if (cls) cls.textContent = 'летом зарплат нет'; }
+    else {
+      const base2 = (expected != null ? expected : came), left2v = base2 - salaries - other;
+      cl.textContent = fmt(left2v);
+      if (cls) cls.textContent = 'ЗП за ' + monthNames[m - 1] + ' — из оплат за ' + srcName.toLowerCase()
+        + (expected != null ? ' · по уже пришедшему ' + fmt(came - salaries - other) : '');
+    }
+  }
   const at = pb.at ? new Date(pb.at).toLocaleString('ru-RU', { day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' }) : '';
   document.getElementById('cashSub').textContent = 'ЗП за месяц платится до 5-го из оплат за следующий месяц · счета из CRM' + (at ? ' на ' + at : '');
   card.style.display = '';
