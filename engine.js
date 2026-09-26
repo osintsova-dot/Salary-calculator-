@@ -1356,7 +1356,9 @@ renderPremiumBlock();
 // Delegated click for slip buttons and fixed counters
 document.addEventListener('click', function(e) {
   const btn = e.target.closest('.btn-slip');
-  if (btn) openSlip(btn.dataset.teacher);
+  // у админского квитка того же класса нет data-teacher — его открывает свой onclick,
+  // а этот общий обработчик раньше звал openSlip(undefined) и сбивал цель печати
+  if (btn && btn.dataset.teacher) openSlip(btn.dataset.teacher);
 
   const hBtn = e.target.closest('[data-action]');
   if (hBtn) {
@@ -1509,6 +1511,11 @@ function slipHistory(teacher) {
 }
 
 let currentSlipTeacher = '';
+// Кому открыт квиток, продублировано на window: кнопки в модалке зовут функции через
+// глобальный объект, и переменная из области видимости скрипта туда доезжает не всегда —
+// из-за этого «Печать» у администратора уходила в учительскую ветку и молча падала.
+function setSlipTarget(t) { currentSlipTeacher = t; try { window.__slipTarget = t; } catch (e) {} }
+function slipTarget() { return (typeof window !== 'undefined' && typeof window.__slipTarget === 'string') ? window.__slipTarget : currentSlipTeacher; }
 
 // ---------- АНАЛИЗ: МЕСЯЦ К МЕСЯЦУ ----------
 
@@ -1708,7 +1715,7 @@ function periodLabel() {
 }
 
 function openAdminSlip() {
-  currentSlipTeacher = ADMIN_SLIP;
+  setSlipTarget(ADMIN_SLIP);
   const a = adminNumbers();
   const period = periodLabel();
 
@@ -1847,7 +1854,8 @@ function copyAdminSlip() {
 }
 
 function openSlip(teacher) {
-  currentSlipTeacher = teacher;
+  if (!teacher) return;              // без педагога открывать нечего
+  setSlipTarget(teacher);
   const [y, m] = picker.value.split('-');
   const monthName = monthNames[parseInt(m) - 1];
   const period = monthName.charAt(0).toUpperCase() + monthName.slice(1) + ' ' + y;
@@ -1948,8 +1956,8 @@ function closeSlipBtn() {
 }
 
 function printSlip() {
-  if (currentSlipTeacher === ADMIN_SLIP) return printAdminSlip();
-  const teacher = currentSlipTeacher;
+  if (slipTarget() === ADMIN_SLIP) return printAdminSlip();
+  const teacher = slipTarget();
   const [y, m] = picker.value.split('-');
   const monthName = monthNames[parseInt(m) - 1];
   const period = monthName.charAt(0).toUpperCase() + monthName.slice(1) + ' ' + y;
@@ -2065,8 +2073,8 @@ function printSlip() {
 }
 
 function copySlip() {
-  if (currentSlipTeacher === ADMIN_SLIP) return copyAdminSlip();
-  const teacher = currentSlipTeacher;
+  if (slipTarget() === ADMIN_SLIP) return copyAdminSlip();
+  const teacher = slipTarget();
   const period = document.querySelector('.slip-period')?.textContent || '';
 
   const tGroups = GROUPS.map((g, i) => ({ ...g, i })).filter(g => g.teacher === teacher && isActive(g.i));
