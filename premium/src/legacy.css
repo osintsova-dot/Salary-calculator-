@@ -574,10 +574,11 @@
 
   @media print {
     @page { margin: 10mm; size: A4; }
-    body > *:not(#printArea) { display: none !important; }
-    #printArea {
-      display: block !important;
-    }
+    /* Квиток лежит внутри React-обёртки, поэтому «прямые дети body» больше не годятся:
+     прячем всё по видимости и возвращаем видимость только самому квитку. */
+  body * { visibility: hidden !important; }
+  #printArea, #printArea * { visibility: visible !important; }
+  #printArea { display: block !important; position: absolute; left: 0; top: 0; width: 100%; }
     .print-copy {
       page-break-inside: avoid;
       border: 1px solid #ccc;
