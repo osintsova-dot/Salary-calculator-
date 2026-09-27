@@ -385,8 +385,8 @@ function monthlyAmount(kind, ym) { return (monthlyState[kind] || {})[ym || picke
 // ---------- ДАТИРОВАННЫЕ ПЛАТЕЖИ: НАЛОГИ И ПРОЧИЕ РАСХОДЫ ----------
 // Каждый платёж привязан к дате оплаты: в расход месяца идёт то, что в этом месяце платится.
 
-const KIND_TITLE = { taxes: 'Налоги и взносы', costs: 'Прочие расходы школы', loans: 'Выплаты по кредиту' };
-const KIND_IDS = { taxes: ['taxVal', 'taxList'], costs: ['costVal', 'costList'], loans: ['loanVal', 'loanList'] };
+const KIND_TITLE = { taxes: 'Налоги и взносы', costs: 'Прочие расходы школы', loans: 'Выплаты по кредиту', bank: 'Комиссии банка' };
+const KIND_IDS = { taxes: ['taxVal', 'taxList'], costs: ['costVal', 'costList'], loans: ['loanVal', 'loanList'], bank: ['bankVal', 'bankList'] };
 
 function editMonthly(kind) {
   const [y, m] = picker.value.split('-');
@@ -856,6 +856,7 @@ function render() {
     ? otrAuto.pay
     : (fixedState.otrabotki60 || 0) * 1500 + (fixedState.otrabotki90 || 0) * 2250;
   const taxPay = monthlyAmount('taxes');
+  const bankPay = monthlyAmount('bank');          // комиссии за приём оплат: эквайринг, СБП
   const costCrm = crmSpent(picker.value);
   const costPay = costCrm !== null ? costCrm : monthlyAmount('costs');
   // Кредиты: платёж = целевой аннуитет, чтобы закрыть к дате
@@ -898,7 +899,7 @@ function render() {
   document.getElementById('creditNote').textContent =
     creditN + ' взносов начиная с ' + stParts[1] + '.' + stParts[0] +
     '. По графику ' + fmt(creditGraph) + '/мес, сверх графика +' + fmt(creditExtra) + '/мес. С ' + tgtParts[1] + '.' + tgtParts[0] + ' кредитов нет — освобождается ' + fmt(creditGraph) + '/мес навсегда.';
-  const fixedTotal = adminPay + fixedState.cleaning + fixedState.smm + fixedState.rent + otrabotkiPay + taxPay + costPay + loanPay + totalDeposit;
+  const fixedTotal = adminPay + fixedState.cleaning + fixedState.smm + fixedState.rent + otrabotkiPay + taxPay + bankPay + costPay + loanPay + totalDeposit;
   const totalAllPay = totalHands + fixedTotal;
 
   // Summary cards
@@ -1047,6 +1048,7 @@ function render() {
   document.getElementById('otrabotki90Count').value = fixedState.otrabotki90 || 0;
   document.getElementById('otrabotkiTotal').textContent = fmt(Math.round(otrabotkiPay));
   renderMonthly('taxes');
+  renderMonthly('bank');
   renderMonthly('costs');
   const costBtn = document.getElementById('costEditBtn');
   if (costCrm !== null) {

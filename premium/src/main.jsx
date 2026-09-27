@@ -13,7 +13,7 @@ import {prepareLegacy,expandTeacher} from './bridge';
 prepareLegacy();
 const $=id=>document.getElementById(id);
 const money=n=>Math.round(n).toLocaleString('ru-RU')+' ₽';
-const ids=['totalRevenue','totalPupils','totalFot','totalHandsPay','totalDeposit','depositYearly','adminPay','adminNote','adminGap','totalAllPay','totalAllSub','totalRemainder','remainderSub','reserveAmt','reserveSub','summerMonthlyCard','summerCardSub','freeAmt','freeSub','potentialRevenue','potentialDiff','paidReal','paidSub','paidSplit','paidWays','debtReal','debtSub','spentReal','spentSub','monthLabel','monthNote','fixedTotal','taxVal','costVal','cashLeft','cashLeftSub','loanVal','otrabotkiTotal','cleaningVal','smmVal','rentVal'];
+const ids=['totalRevenue','totalPupils','totalFot','totalHandsPay','totalDeposit','depositYearly','adminPay','adminNote','adminGap','totalAllPay','totalAllSub','totalRemainder','remainderSub','reserveAmt','reserveSub','summerMonthlyCard','summerCardSub','freeAmt','freeSub','potentialRevenue','potentialDiff','paidReal','paidSub','paidSplit','paidWays','debtReal','debtSub','spentReal','spentSub','monthLabel','monthNote','fixedTotal','taxVal','costVal','cashLeft','cashLeftSub','loanVal','otrabotkiTotal','cleaningVal','smmVal','rentVal','bankVal'];
 function snapshot(){return Object.fromEntries(ids.map(id=>[id,$(id)?.textContent||'']))}
 const numeric=v=>Number(String(v).replace(/[^\d−-]/g,'').replace('−','-'))||0;
 const nav=[['overview','Обзор месяца',LayoutDashboard],['teachers','Зарплаты педагогов',Users],['admin','Администратор',Users],['payments','Фиксированные выплаты',Wallet],['reserves','Кредиты и резервы',Landmark],['premium','Годовая премия',Sparkles]];
@@ -34,11 +34,11 @@ function App(){
  // Структура месяца: зарплаты всех, обязательные платежи, кредит, отпускной депозит и остаток.
  const loans=numeric(data.loanVal);
  const wages=Math.max(0,fot-deposit)+numeric(data.adminPay)+numeric(data.otrabotkiTotal)+numeric(data.cleaningVal)+numeric(data.smmVal);
- const fixedNoLoan=numeric(data.rentVal)+numeric(data.taxVal)+numeric(data.costVal);
+ const fixedNoLoan=numeric(data.rentVal)+numeric(data.taxVal)+numeric(data.costVal)+numeric(data.bankVal);
  const profit=Math.max(0,revenue-numeric(data.totalAllPay));
  const segments=[
   {label:'Зарплаты — все',value:wages,color:'#7952cc'},
-  {label:'Аренда, налоги, расходы',value:fixedNoLoan,color:'#c2afe8'},
+  {label:'Аренда, налоги, расходы, банк',value:fixedNoLoan,color:'#c2afe8'},
   {label:'Кредиты',value:loans,color:'#d98c6a'},
   {label:'Депозит на отпускные',value:deposit,color:'#63b39a'},
   {label:'Прибыль школы (начислено)',value:profit,color:'#efc95b'}];

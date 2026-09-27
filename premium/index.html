@@ -290,6 +290,20 @@
           <div class="admin-item-value" id="taxVal" style="color:#555">0 ₽</div>
         </div>
       </div>
+      <!-- Комиссии банка -->
+      <div class="fx-row" style="display:flex;align-items:center;padding:12px var(--px);border-top:1px solid var(--gray-100)">
+        <div style="flex:1">
+          <div class="admin-name" style="font-size:14px">Комиссии банка</div>
+          <div class="admin-rule" id="bankRule">эквайринг, СБП, обслуживание — по выписке
+            &nbsp;<button onclick="editMonthly('bank')" style="font-size:10px;font-family:var(--font);border:1px solid var(--gray-200);background:none;border-radius:10px;padding:1px 7px;cursor:pointer;color:var(--gray-400)">✏️ сумма</button>
+          </div>
+          <div id="bankList" style="font-size:11px;color:var(--gray-400);margin-top:4px;line-height:1.6"></div>
+        </div>
+        <div class="admin-item">
+          <div class="admin-item-label">В этом месяце</div>
+          <div class="admin-item-value" id="bankVal" style="color:#555">0 ₽</div>
+        </div>
+      </div>
       <!-- Прочие расходы школы -->
       <div class="fx-row" style="display:flex;align-items:center;padding:12px var(--px);border-top:1px solid var(--gray-100)">
         <div style="flex:1">
