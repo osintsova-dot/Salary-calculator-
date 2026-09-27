@@ -462,7 +462,7 @@
       <div style="background:var(--gray-50);border-radius:12px;padding:14px;margin:0 0 14px">
         <div style="font-size:13px;font-weight:700;color:var(--gray-900)">С телефона — обновить с сервера</div>
         <div style="font-size:12px;color:var(--gray-600);line-height:1.5;margin:4px 0 10px">
-          Телефон читает последний снимок мгновенно (обновляется сам раз в сутки). Код доступа вводится один раз и запоминается.
+          «Обновить» — мгновенно берёт последний снимок сервера. «Собрать заново» — сервер сам идёт в BigBen и пересчитывает выручку, счета и расходы: 3–4 минуты, можно с телефона. Код доступа вводится один раз и запоминается.
         </div>
         <div style="display:flex;gap:8px;flex-wrap:wrap">
           <input id="bbToken" type="password" placeholder="код доступа" autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false" style="
@@ -471,6 +471,9 @@
           <button id="bbServerBtn" onclick="bbServerRefresh()" style="
             font-family:var(--font);font-size:13px;font-weight:700;padding:9px 16px;
             border-radius:10px;border:none;background:var(--purple);color:#fff;cursor:pointer">Обновить</button>
+          <button id="bbCollectBtn" onclick="collectFromServer()" title="Сервер сам зайдёт в BigBen и пересчитает выручку — 3–4 минуты" style="
+            font-family:var(--font);font-size:13px;font-weight:700;padding:9px 16px;
+            border-radius:10px;border:1.5px solid var(--purple);background:none;color:var(--purple);cursor:pointer">🔄 Собрать заново</button>
         </div>
         <div id="bbServerMsg" style="font-size:12px;margin-top:8px;color:var(--gray-600)"></div>
       </div>

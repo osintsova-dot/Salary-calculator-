@@ -2219,8 +2219,48 @@ function applyBigBen(rawList) {
 }
 
 const BB_SERVER = 'https://ss-bb.o-sintsova.workers.dev/data';
+const TICK_URL = 'https://ss-bb.o-sintsova.workers.dev/tick-7a3f9c2e51';
 
 // Обновление без компьютера: воркер сам ходит в BigBen и приносит те же данные
+// Полный сбор силами сервера: он сам заходит в BigBen и пересчитывает выручку, счета
+// и расходы. Нужен, чтобы обновляться с телефона в любой момент, а не ждать ночного
+// автосбора и не открывать закладку на компьютере. Шаги те же, что у отработок.
+async function collectFromServer() {
+  const input = document.getElementById('bbToken');
+  const msg = document.getElementById('bbServerMsg');
+  const btn = document.getElementById('bbCollectBtn');
+  const token = (input.value || '').trim() || localStorage.getItem('bbToken') || '';
+  if (!token) { msg.style.color = 'var(--red, #c00)'; msg.textContent = 'Введи код доступа'; input.focus(); return; }
+  if (btn.disabled) return;
+  btn.disabled = true;
+  const was = btn.textContent;
+  const say = (t, color) => { msg.style.color = color || 'var(--gray-600)'; msg.textContent = t; };
+  const step = async (what, minutes) => {
+    const stop = new AbortController();
+    const timer = setTimeout(() => stop.abort(), minutes * 60000);
+    try {
+      const r = await fetch(TICK_URL + '?do=' + what + '&t=' + encodeURIComponent(token), { cache: 'no-store', signal: stop.signal });
+      return await r.json();
+    } finally { clearTimeout(timer); }
+  };
+  try {
+    btn.textContent = 'Вход…';   say('Захожу в BigBen — около минуты…');
+    const w = await step('warm', 3);
+    if (!w || !w.ok) throw new Error((w && w.error) || 'BigBen не пустил');
+    btn.textContent = 'Выручка…'; say('Собираю выручку по группам — 2–3 минуты…');
+    const pull = await step('pull', 6);
+    if (!pull || !pull.ok) throw new Error((pull && pull.error) || 'выручка не собралась');
+    btn.textContent = 'Финансы…'; say('Собираю оплаты и расходы…');
+    try { await step('fin', 5); } catch (e) {}          // финансы иногда флапают — не роняем весь сбор
+    localStorage.setItem('bbToken', token);
+    btn.textContent = '✅ Готово';
+    await bbServerRefresh();                             // подтягиваем свежий снимок в страницу
+  } catch (e) {
+    say('⚠️ ' + (e.message || 'не вышло') + '. Попробуй ещё раз или подожди ночной сбор.', 'var(--red, #c00)');
+  }
+  setTimeout(() => { btn.textContent = was; btn.disabled = false; }, 4000);
+}
+
 async function bbServerRefresh() {
   const input = document.getElementById('bbToken');
   const msg = document.getElementById('bbServerMsg');
