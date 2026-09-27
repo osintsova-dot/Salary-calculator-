@@ -443,6 +443,9 @@ const GROUPS = [
   { teacher: 'Оксана Синцова', name: 'GMF 1A',        dur: 60, pupils: 9  },
   { teacher: 'Оксана Синцова', name: 'Genki 1A',      dur: 60, pupils: 0  },
   { teacher: 'Оксана Синцова', name: 'Genki 1B',      dur: 60, pupils: 0  },
+  // Китайский: оплата педагогу не 25%, а 2 500 ₽ за проведённый час (8 часов в месяц).
+  // Стартует в октябре; пока в CRM группы нет, она сама остаётся неактивной.
+  { teacher: 'Ксения Шиллер', name: 'Китайский 1',   dur: 60, pupils: 0, from: '2026-10', hourly: 2500, hoursPerMonth: 8 },
 ];
 
 const TEACHER_COLORS = {
@@ -479,6 +482,7 @@ function monthCrm(ym) {
 // нет данных CRM (прогноз) — если есть ученики. Плюс ручное выключение на этот месяц.
 function isActive(i, ym) {
   ym = ym || curYM();
+  if (GROUPS[i].from && ym < GROUPS[i].from) return false;   // группа ещё не началась
   if (state.offM[ym] && state.offM[ym][i]) return false;
   const mr = monthCrm(ym);
   if (mr) return (+mr[i] || 0) > 0;
@@ -509,6 +513,10 @@ function calcGroup(i, ym) {
   const noshow = mr ? noShowGroup(i, ym) - transferAdjGroup(i, ym) : 0;   // выбывшие без уроков; переводы — до полного абонемента
   const early = mr ? earlyGroup(i, ym) : 0;                  // ранняя оплата сентября по старой цене
   const revenue = Math.max(0, gross - noshow - abonDiscGroup(i, ym) - early);   // минус скидки длинных абонементов и ранней оплаты
+  if (g.hourly) {                                   // фиксированная ставка за час, а не доля выручки
+    const hands = g.hourly * (g.hoursPerMonth || 8);
+    return { revenue, fot: hands + DEPOSIT, hands, deposit: DEPOSIT };
+  }
   const fot = Math.round(revenue * TEACHER_PCT);
   const hands = fot - DEPOSIT;
   return { revenue, fot, hands: Math.max(0, hands), deposit: DEPOSIT };
@@ -1066,7 +1074,9 @@ function render() {
   container.innerHTML = '';
 
   teachers.forEach(teacher => {
-    const tGroups = GROUPS.map((g, i) => ({ ...g, i })).filter(g => g.teacher === teacher);
+    // группу, которая ещё не началась, в таблице месяца не показываем
+    const tGroups = GROUPS.map((g, i) => ({ ...g, i }))
+      .filter(g => g.teacher === teacher && !(g.from && picker.value < g.from));
     let tRevenue = 0, tFot = 0, tHands = 0, tDeposit = 0, tPupils = 0;
 
     tGroups.forEach(g => {
