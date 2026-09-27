@@ -609,7 +609,7 @@ function paidNet(pb, ym) { return Math.round((pb.paid[ym] || 0) - (pb.refunds[ym
 async function fetchPayData() {
   const token = localStorage.getItem('bbToken') || ''; if (!token || window.__payFromHash) return;
   try {
-    const r = await fetch('https://ss-bb.o-sintsova.workers.dev/pay-data?t=' + encodeURIComponent(token), { cache: 'no-store' });
+    const r = await srvFetch('/pay-data?t=' + encodeURIComponent(token), { cache: 'no-store' });
     const d = await r.json();
     if (d && d.ok && d.data && Array.isArray(d.data.inv)) { localStorage.setItem('ss_pay', JSON.stringify(d.data)); render(); }
   } catch (e) {}
@@ -689,7 +689,7 @@ function renderCash(t) {
 async function fetchFinanceData(){
   const token=localStorage.getItem('bbToken')||''; if(!token) return;
   try{
-    const r=await fetch('https://ss-bb.o-sintsova.workers.dev/finance-data?t='+encodeURIComponent(token),{cache:'no-store'});
+    const r=await srvFetch('/finance-data?t='+encodeURIComponent(token),{cache:'no-store'});
     const d=await r.json();
     if(d && d.ok){
       if(d.cash) localStorage.setItem('ss_cash',JSON.stringify(d.cash));
@@ -715,7 +715,7 @@ async function fetchOtrSavings(){
   const token=localStorage.getItem('bbToken')||''; if(!token) return;
   const card=document.getElementById('otrSavingsCard'); if(!card) return;
   try{
-    const r=await fetch('https://ss-bb.o-sintsova.workers.dev/otr-data?t='+encodeURIComponent(token),{cache:'no-store'});
+    const r=await srvFetch('/otr-data?t='+encodeURIComponent(token),{cache:'no-store'});
     const d=await r.json();
     if(!d || !d.ok || !Array.isArray(d.payLessons)) return;
     const OTR90={GI1:1,GI2:1,P3:1,P4:1,P5:1,GW:1};
@@ -2218,8 +2218,25 @@ function applyBigBen(rawList) {
   return changed.length;
 }
 
-const BB_SERVER = 'https://ss-bb.o-sintsova.workers.dev/data';
-const TICK_URL = 'https://ss-bb.o-sintsova.workers.dev/tick-7a3f9c2e51';
+// Сервер: сначала российский вход (Яндекс Облако) — из России Cloudflare режут провайдеры
+// и без VPN страницы не открывались. Если российский адрес не ответил, пробуем прежний.
+const SRV_RU = 'https://d5d6o4mldv5m1nj5hvih.6brbn2wz.apigw.yandexcloud.net';
+const SRV_CF = 'https://ss-bb.o-sintsova.workers.dev';
+let SRV = localStorage.getItem('ss_srv') || SRV_RU;
+async function srvFetch(path, opts) {
+  const order = SRV === SRV_RU ? [SRV_RU, SRV_CF] : [SRV_CF, SRV_RU];
+  let last;
+  for (const base of order) {
+    try {
+      const r = await fetch(base + path, opts);
+      if (r.ok || r.status === 403) { SRV = base; try { localStorage.setItem('ss_srv', base); } catch (e) {} return r; }
+      last = new Error('сервер ответил ' + r.status);
+    } catch (e) { last = e; }
+  }
+  throw last || new Error('сервер не ответил');
+}
+const BB_SERVER = '/data';
+const TICK_URL = '/tick-7a3f9c2e51';
 
 // Обновление без компьютера: воркер сам ходит в BigBen и приносит те же данные
 // Полный сбор силами сервера: он сам заходит в BigBen и пересчитывает выручку, счета
@@ -2239,7 +2256,7 @@ async function collectFromServer() {
     const stop = new AbortController();
     const timer = setTimeout(() => stop.abort(), minutes * 60000);
     try {
-      const r = await fetch(TICK_URL + '?do=' + what + '&t=' + encodeURIComponent(token), { cache: 'no-store', signal: stop.signal });
+      const r = await srvFetch(TICK_URL + '?do=' + what + '&t=' + encodeURIComponent(token), { cache: 'no-store', signal: stop.signal });
       return await r.json();
     } finally { clearTimeout(timer); }
   };
@@ -2277,7 +2294,7 @@ async function bbServerRefresh() {
     const timer = setTimeout(() => stop.abort(), 150000);
     let r;
     try {
-      r = await fetch(BB_SERVER + '?t=' + encodeURIComponent(token), { cache: 'no-store', signal: stop.signal });
+      r = await srvFetch(BB_SERVER + '?t=' + encodeURIComponent(token), { cache: 'no-store', signal: stop.signal });
     } catch (err) {
       throw new Error(stop.signal.aborted
         ? 'сервер не ответил за 2,5 минуты — похоже, мобильная сеть режет Cloudflare. Попробуй ещё раз, или обнови с компьютера через закладку'
@@ -2432,7 +2449,7 @@ async function __payScan(target) {
     localStorage.setItem('ss_pay', JSON.stringify(data));
     render();
     const token = localStorage.getItem('bbToken') || '';
-    if (token) fetch('https://ss-bb.o-sintsova.workers.dev/pay-data?t=' + encodeURIComponent(token), {
+    if (token) srvFetch('/pay-data?t=' + encodeURIComponent(token), {
       method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(data),
     }).then(r => r.json()).then(d => { payToast(d && d.ok ? '✅ Оплаты загружены: ' + data.inv.length + ' счетов · отправлено на сервер, телефон обновится' : '⚠️ Оплаты применены, но на сервер не отправились'); })
       .catch(() => payToast('⚠️ Оплаты применены, но на сервер не отправились'));

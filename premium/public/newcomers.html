@@ -299,7 +299,21 @@ input[type=month],input[type=date]{font-family:var(--font);font-size:13px;paddin
 
 <script>
 "use strict";
-var WORKER="https://ss-bb.o-sintsova.workers.dev";
+var WORKER_RU="https://d5d6o4mldv5m1nj5hvih.6brbn2wz.apigw.yandexcloud.net", WORKER_CF="https://ss-bb.o-sintsova.workers.dev";
+var WORKER=localStorage.getItem("ss_srv")||WORKER_RU;   // из России Cloudflare режут, основной вход — российский
+function srvFetch(path,opts){
+  var order = WORKER===WORKER_RU?[WORKER_RU,WORKER_CF]:[WORKER_CF,WORKER_RU];
+  var i=0;
+  function attempt(){
+    var base=order[i++];
+    return fetch(base+path,opts).then(function(r){
+      if(r.ok||r.status===403){ WORKER=base; try{localStorage.setItem("ss_srv",base);}catch(e){} return r; }
+      if(i<order.length) return attempt();
+      throw new Error("сервер ответил "+r.status);
+    }).catch(function(e){ if(i<order.length) return attempt(); throw e; });
+  }
+  return attempt();
+}
 var PAY=null, STUD=null;
 function token(){return localStorage.getItem("bbToken")||"";}
 function esc(x){return String(x==null?"":x).replace(/[&<>]/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;"}[c];});}
@@ -323,7 +337,7 @@ function showTab(t){
 }
 function loadLeads(){
   document.getElementById("lbody").innerHTML='<div class="card"><div class="row">Загрузка…</div></div>';
-  fetch(WORKER+"/leads?t="+encodeURIComponent(token()),{cache:"no-store"})
+  srvFetch("/leads?t="+encodeURIComponent(token()),{cache:"no-store"})
     .then(function(r){return r.json();})
     .then(function(d){
       LEADS=(d&&d.data)||null; LMARKS=(d&&d.marks)||{};
@@ -339,7 +353,7 @@ function markLead(phone,state){
   if(LMARKS[phone]&&LMARKS[phone].state===state) state=null;       // повторное нажатие снимает
   if(state) LMARKS[phone]={state:state}; else delete LMARKS[phone];
   renderLeads();
-  fetch(WORKER+"/leads-mark?t="+encodeURIComponent(token()),{method:"POST",headers:{"content-type":"application/json"},
+  srvFetch("/leads-mark?t="+encodeURIComponent(token()),{method:"POST",headers:{"content-type":"application/json"},
     body:JSON.stringify({phone:phone,state:state})}).catch(function(){});
 }
 function fmtPhone(p){return "+7 "+p.slice(0,3)+" "+p.slice(3,6)+"-"+p.slice(6,8)+"-"+p.slice(8,10);}
@@ -411,8 +425,8 @@ function boot(){
 function load(){
   document.getElementById("body").innerHTML='<div class="card"><div class="row">Загрузка…</div></div>';
   Promise.all([
-    fetch(WORKER+"/pay-data?t="+encodeURIComponent(token()),{cache:"no-store"}).then(function(r){return r.json();}).catch(function(){return null;}),
-    fetch(WORKER+"/students-data?t="+encodeURIComponent(token()),{cache:"no-store"}).then(function(r){return r.json();}).catch(function(){return null;})
+    srvFetch("/pay-data?t="+encodeURIComponent(token()),{cache:"no-store"}).then(function(r){return r.json();}).catch(function(){return null;}),
+    srvFetch("/students-data?t="+encodeURIComponent(token()),{cache:"no-store"}).then(function(r){return r.json();}).catch(function(){return null;})
   ]).then(function(res){
     PAY=(res[0]&&res[0].data)||null;
     STUD=(res[1]&&res[1].data)||null;
@@ -443,7 +457,7 @@ function loadCsv(f){
     STUD=data;
     try{localStorage.setItem("ss_students",JSON.stringify(data));}catch(e){}
     render();
-    fetch(WORKER+"/students-data?t="+encodeURIComponent(token()),{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify(data)})
+    srvFetch("/students-data?t="+encodeURIComponent(token()),{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify(data)})
       .then(function(r){return r.json();})
       .then(function(d){document.getElementById("stamp").textContent += d&&d.ok?" · отправлено на сервер":" · на сервер не ушло";})
       .catch(function(){});

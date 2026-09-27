@@ -130,7 +130,21 @@ table.rep tr.d td:last-child{color:#0a7a68;font-weight:600}
 
 <script>
 "use strict";
-var WORKER="https://ss-bb.o-sintsova.workers.dev";
+var WORKER_RU="https://d5d6o4mldv5m1nj5hvih.6brbn2wz.apigw.yandexcloud.net", WORKER_CF="https://ss-bb.o-sintsova.workers.dev";
+var WORKER=localStorage.getItem("ss_srv")||WORKER_RU;   // из России Cloudflare режут, основной вход — российский
+function srvFetch(path,opts){
+  var order = WORKER===WORKER_RU?[WORKER_RU,WORKER_CF]:[WORKER_CF,WORKER_RU];
+  var i=0;
+  function attempt(){
+    var base=order[i++];
+    return fetch(base+path,opts).then(function(r){
+      if(r.ok||r.status===403){ WORKER=base; try{localStorage.setItem("ss_srv",base);}catch(e){} return r; }
+      if(i<order.length) return attempt();
+      throw new Error("сервер ответил "+r.status);
+    }).catch(function(e){ if(i<order.length) return attempt(); throw e; });
+  }
+  return attempt();
+}
 var el=function(t,p,kids){var e=document.createElement(t);if(p)for(var k in p){if(k==="class")e.className=p[k];else if(k==="text")e.textContent=p[k];else if(k.slice(0,2)==="on")e[k.toLowerCase()]=p[k];else e.setAttribute(k,p[k]);}(kids||[]).forEach(function(c){if(c)e.appendChild(c);});return e;};
 var DATA=null, MARKS={};
 function token(){return localStorage.getItem("bbToken")||"";}
@@ -144,7 +158,7 @@ function collectNow(){
   if(b.disabled) return;
   b.disabled=true; var was=b.textContent;
   var tick=function(t){b.textContent=t;};
-  var go=function(what,ms){return fetch(WORKER+"/tick-7a3f9c2e51?do="+what+"&t="+encodeURIComponent(token()),{cache:"no-store"}).then(function(r){return r.json();});};
+  var go=function(what,ms){return srvFetch("/tick-7a3f9c2e51?do="+what+"&t="+encodeURIComponent(token()),{cache:"no-store"}).then(function(r){return r.json();});};
   tick("Вход в BigBen…");
   go("warm").then(function(w){
     if(!w||!w.ok) throw new Error((w&&w.error)||"BigBen не пустил");
@@ -167,7 +181,7 @@ function boot(){
 }
 function load(){
   document.getElementById("paneL").textContent="Загрузка…";
-  fetch(WORKER+"/otr-data?t="+encodeURIComponent(token()),{cache:"no-store"})
+  srvFetch("/otr-data?t="+encodeURIComponent(token()),{cache:"no-store"})
     .then(function(r){return r.json();})
     .then(function(d){
       if(!d.ok){document.getElementById("paneL").textContent=(d.error||"ошибка")+" — проверьте код";return;}
@@ -197,7 +211,7 @@ function renderReport(){
   var pane=document.getElementById("paneR");pane.textContent="";
   if(!ARCH){
     pane.appendChild(el("div",{class:"empty",text:"Загрузка архива…"}));
-    fetch(WORKER+"/otr-reports?t="+encodeURIComponent(token()),{cache:"no-store"})
+    srvFetch("/otr-reports?t="+encodeURIComponent(token()),{cache:"no-store"})
       .then(function(r){return r.json();})
       .then(function(d){ARCH=(d&&d.all)||{};renderReport();})
       .catch(function(){ARCH={};renderReport();});
@@ -253,7 +267,7 @@ function renderMonth(){
   var pane=document.getElementById("paneM");pane.textContent="";
   if(!MON){
     pane.appendChild(el("div",{class:"empty",text:"Загрузка…"}));
-    fetch(WORKER+"/otr-months?t="+encodeURIComponent(token()),{cache:"no-store"})
+    srvFetch("/otr-months?t="+encodeURIComponent(token()),{cache:"no-store"})
       .then(function(r){return r.json();}).then(function(d){MON=(d&&d.all)||{};renderMonth();})
       .catch(function(){MON={};renderMonth();});
     return;
@@ -304,7 +318,7 @@ function weekLabel(w){
 function mark(uid,m){
   var cur=MARKS[uid]===m?"clear":m;
   MARKS[uid]=cur==="clear"?undefined:cur;
-  fetch(WORKER+"/otr-mark?t="+encodeURIComponent(token())+"&uid="+uid+"&mark="+(cur==="clear"?"clear":cur),{cache:"no-store"});
+  srvFetch("/otr-mark?t="+encodeURIComponent(token())+"&uid="+uid+"&mark="+(cur==="clear"?"clear":cur),{cache:"no-store"});
   renderLists();
 }
 
