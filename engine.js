@@ -2500,11 +2500,17 @@ async function __payScan(target) {
     "o.push({n:m[1].trim(),p:+m[2],t:(c[1].textContent||'').replace(/\\s+/g,' ').trim()})});return o};" +
     "const cur=await grab('current'),fut=await grab('future');const map={};" +
     "[].concat(fut,cur).forEach(g=>{map[g.n]=g});" +
-    // 2. выручка за текущий и соседние месяцы: отчёт 4 (почасовые) и 7 (абонементы)
+    // 2. выручка за текущий и соседние месяцы: отчёт 4 (почасовые) и 7 (абонементы).
+    //    ПРОПУСКИ ВЫРУЧКУ НЕ СНИЖАЮТ: кто числится в группе весь месяц — полный абонемент;
+    //    по фактическим урокам считаем только пришедших/ушедших в середине месяца.
     "const nw=new Date(),y=nw.getFullYear(),mo=nw.getMonth();" +
     "const pad=n=>String(n).padStart(2,'0');const ds=d=>d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate());" +
+    // «21 мая 2026» → «2026-05-21»; названия месяцев спрашиваем у браузера, чтобы не тащить кириллицу в закладку
+    "const RU={},d1=new Intl.DateTimeFormat('ru',{month:'short'}),d2=new Intl.DateTimeFormat('ru',{day:'numeric',month:'short'});" +
+    "for(var mi=0;mi<12;mi++){var dt=new Date(2020,mi,15);RU[d1.format(dt).slice(0,3).toLowerCase()]=mi+1;RU[((d2.format(dt).match(/[^\\d\\s.]+/)||[''])[0]).slice(0,3).toLowerCase()]=mi+1;}" +
+    "const rud=v=>{const m=String(v||'').match(/(\\d{1,2})\\s+(\\S+)\\s+(\\d{4})/);if(!m)return '';const mm=RU[m[2].slice(0,3).toLowerCase()];return mm?m[3]+'-'+pad(mm)+'-'+pad(+m[1]):''};" +
     "const rev={};" +
-    "for(var k=-1;k<=1;k++){const a=new Date(y,mo+k,1),b=new Date(y,mo+k+1,0);const key=a.getFullYear()+'-'+pad(a.getMonth()+1);" +
+    "for(var k=-1;k<=1;k++){const a=new Date(y,mo+k,1),b=new Date(y,mo+k+1,0);const key=a.getFullYear()+'-'+pad(a.getMonth()+1);const p0=ds(a),p1=ds(b);" +
     "const acc={};" +
     "for(var ri=0;ri<2;ri++){const rid=ri?7:4;" +
     "const q=await fetch('/admin/index.php?obj=reportmain&action=list&report_type_id='+rid+'&filial_id=0&period_start='+ds(a)+'&period_end='+ds(b),{credentials:'include'});" +
@@ -2515,7 +2521,8 @@ async function __payScan(target) {
     "if(/\\u041a \\u043e\\u043f\\u043b\\u0430\\u0442\\u0435, \\u0440\\u0443\\u0431/.test(hd)&&cg){var rv=0,dc=0,fr=0,any=0,pcts={},ab=0;" +
     "rows.slice(1).forEach(tr=>{const c=[].slice.call(tr.children).map(x=>x.textContent.replace(/\\s+/g,' ').trim());" +
     "if(c.length<8||!/^\\d+$/.test(c[0]))return;any=1;const base=parseFloat(c[4]||'0'),ind=parseFloat(c[5]||'0'),sum=parseFloat((c[7]||'0').replace(',','.'));" +
-    "rv+=isNaN(sum)?0:sum;const h=parseFloat(c[6]||'0');ab+=(gh>0&&h>=gh)?Math.round(8*(c[5]===''?base:ind)):(isNaN(sum)?0:sum);if(ind===0)fr++;else if(ind<base-0.001)dc++;var pc=base>0?Math.round((1-ind/base)*100):0;pcts[pc]=(pcts[pc]||0)+1;});" +
+    "rv+=isNaN(sum)?0:sum;const h=parseFloat(c[6]||'0');const jd=rud(c[2]),lf=rud(c[3]);const whole=jd&&h>0&&jd<=p0&&(!lf||lf>p1);" +
+     "ab+=((gh>0&&h>=gh)||whole)?Math.round(8*(c[5]===''?base:ind)):(isNaN(sum)?0:sum);if(ind===0)fr++;else if(ind<base-0.001)dc++;var pc=base>0?Math.round((1-ind/base)*100):0;pcts[pc]=(pcts[pc]||0)+1;});" +
     "if(any){const o=acc[cg];acc[cg]=o?[o[0]+Math.round(rv),o[1]+dc,o[2]+fr,o[3],o[4]+Math.round(ab)]:[Math.round(rv),dc,fr,pcts,Math.round(ab)];}}});}" +
     "if(Object.keys(acc).length)rev[key]=acc;}" +
     "const all=Object.values(map);" +
