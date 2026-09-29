@@ -853,6 +853,17 @@ function render() {
     totalPotential += MAX_PUPILS * TARIFF[g.dur];
   });
 
+  // Зарплата Оксаны — тоже её деньги: в «остатке» она возвращается обратно,
+  // а в выплатах и в диаграмме её быть не должно.
+  const ownerName = 'Оксана Синцова';
+  let ownerHands = 0, ownerDeposit = 0;
+  GROUPS.forEach((g, i) => {
+    if (g.teacher !== ownerName || !isActive(i)) return;   // только группы, что идут в выручку месяца
+    const c = calcGroup(i);
+    ownerHands += c.hands;
+    ownerDeposit += c.deposit;
+  });
+
   // база администратора = выручка + возврат абонементных скидок (активных в выбранном месяце)
   const adminBase = totalRevenue + adminAbonback();
   const adminPct = Math.round(adminBase * ADMIN_PCT);
@@ -918,6 +929,17 @@ function render() {
     + (crmNow && noShowMonth().length ? ' · не считаем ' + noShowMonth().length + ' выбывших без уроков (−' + fmt(noShowMonth().reduce((a, e) => a + e.sum, 0)) + ')' : '');
   document.getElementById('totalFot').textContent = fmt(totalFot);
   document.getElementById('totalHandsPay').textContent = 'На руки: ' + fmt(totalHands);
+  // Сколько денег реально уйдёт людям в этом месяце. Своя ЗП сюда не входит —
+  // это не выплата, а то, что остаётся мне; отпускной депозит тоже не выплата, он копится.
+  const teachersPay = Math.max(0, totalHands - ownerHands);
+  const payoutPeople = teachersPay + otrabotkiPay + adminPay + fixedState.smm + fixedState.cleaning;
+  document.getElementById('ownerHandsVal').textContent = fmt(ownerHands);
+  document.getElementById('payoutPeople').textContent = fmt(payoutPeople);
+  document.getElementById('payoutBreak').textContent =
+    'Учителя ' + fmt(teachersPay + otrabotkiPay) + (otrabotkiPay ? ' (с отработками ' + fmt(otrabotkiPay) + ')' : '')
+    + ' · админ ' + fmt(adminPay) + ' · СММ ' + fmt(fixedState.smm) + ' · уборка ' + fmt(fixedState.cleaning);
+  document.getElementById('payoutNote').textContent =
+    'Без моей ЗП ' + fmt(ownerHands) + ' и без отпускного депозита ' + fmt(totalDeposit);
   const activeGroups = GROUPS.filter((g, i) => isActive(i)).length;
   document.getElementById('totalDeposit').textContent = fmt(totalDeposit);
   document.getElementById('depositYearly').textContent = activeGroups + ' активных групп · за 9 мес: ' + fmt(totalDeposit * 9);
@@ -936,15 +958,6 @@ function render() {
     }
   }
   const profit = totalRevenue - totalAllPay;
-  // Зарплата Оксаны — тоже её деньги, поэтому в «остатке» она возвращается обратно
-  const ownerName = 'Оксана Синцова';
-  let ownerHands = 0, ownerDeposit = 0;
-  GROUPS.forEach((g, i) => {
-    if (g.teacher !== ownerName || !isActive(i)) return;   // только группы, что идут в выручку месяца
-    const c = calcGroup(i);
-    ownerHands += c.hands;
-    ownerDeposit += c.deposit;
-  });
   const remainder = profit + ownerHands;
   lastTotals = {
     pupils: totalPupils, revenue: totalRevenue, fot: totalFot, hands: totalHands,
