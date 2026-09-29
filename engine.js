@@ -936,8 +936,9 @@ function render() {
   document.getElementById('ownerHandsVal').textContent = fmt(ownerHands);
   document.getElementById('payoutPeople').textContent = fmt(payoutPeople);
   document.getElementById('payoutBreak').textContent =
-    'Учителя ' + fmt(teachersPay + otrabotkiPay) + (otrabotkiPay ? ' (с отработками ' + fmt(otrabotkiPay) + ')' : '')
-    + ' · админ ' + fmt(adminPay) + ' · СММ ' + fmt(fixedState.smm) + ' · уборка ' + fmt(fixedState.cleaning);
+    'Учителя ' + fmt(teachersPay)
+    + (otrabotkiPay ? ' + отработки ' + fmt(otrabotkiPay) : '')
+    + ' + админ ' + fmt(adminPay) + ' + СММ ' + fmt(fixedState.smm) + ' + уборка ' + fmt(fixedState.cleaning);
   document.getElementById('payoutNote').textContent =
     'Без моей ЗП ' + fmt(ownerHands) + ' и без отпускного депозита ' + fmt(totalDeposit);
   const activeGroups = GROUPS.filter((g, i) => isActive(i)).length;
