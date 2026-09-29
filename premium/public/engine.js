@@ -1531,11 +1531,16 @@ function slipTarget() { return (typeof window !== 'undefined' && typeof window._
 
 // ---------- АНАЛИЗ: МЕСЯЦ К МЕСЯЦУ ----------
 
+// В графике — ТОЛЬКО месяцы, по которым есть выгрузка из CRM. Месяцы, которые
+// просто открывали в калькуляторе (прикидки на ноябрь, май), — не аналитика, а фантазия.
 function analysisRows() {
   const h = getHistory();
+  const crm = state.crmRevM || {};
+  const nowYm = new Date(Date.now() + 7 * 3600e3).toISOString().slice(0, 7);
   return Object.keys(h).sort().map(m => {
+    if (!crm[m] || !Object.keys(crm[m]).length) return null;
     const rec = monthSnapshot(h[m]);
-    return rec && rec.t ? { m, ...rec.t } : null;
+    return rec && rec.t ? { m, kind: m > nowYm ? 'план' : 'факт', ...rec.t } : null;
   }).filter(Boolean);
 }
 
@@ -1586,14 +1591,20 @@ function chartSVG(rows) {
   </svg>`;
 }
 
+function badge(kind) {
+  if (!kind) return '';
+  const plan = kind === 'план';
+  return `<span style="margin-left:6px;padding:1px 7px;border-radius:99px;font-size:10px;font-weight:700;letter-spacing:.03em;` +
+    (plan ? `background:#FFF4D6;color:#8A6200">план` : `background:#E8F5EC;color:#1F7A44">факт`) + '</span>';
+}
+
 function openAnalysis() {
   const rows = analysisRows();
   const body = document.getElementById('analysisBody');
 
-  if (rows.length < 2) {
+  if (!rows.length) {
     body.innerHTML = `<div style="background:var(--gray-50);border-radius:12px;padding:18px;font-size:13px;color:var(--gray-600);line-height:1.6">
-      Пока сравнивать не с чем: в истории ${rows.length === 1 ? 'один месяц' : 'нет месяцев'}.
-      Каждый месяц запоминается сам, как только ты его открываешь и считаешь, — вернись сюда в конце следующего.
+      Данных из CRM пока нет. Нажми «Собрать заново» на главной — и месяц появится здесь.
     </div>`;
     document.getElementById('analysisModal').classList.add('open');
     return;
@@ -1617,7 +1628,7 @@ function openAnalysis() {
   rows.forEach((r, i) => {
     const prev = i ? rows[i - 1] : null;
     table += `<tr style="border-top:1px solid var(--gray-100)">
-      <td style="padding:7px 8px">${fmtMonth(r.m)}</td>
+      <td style="padding:7px 8px">${fmtMonth(r.m)}${badge(r.kind)}</td>
       <td style="padding:7px 8px;text-align:right">${r.pupils}</td>
       <td style="padding:7px 8px;text-align:right">${deltaHTML(r.pupils, prev && prev.pupils, 'уч.')}</td>
       <td style="padding:7px 8px;text-align:right">${fmt(r.revenue)}</td>
@@ -1627,12 +1638,12 @@ function openAnalysis() {
   });
   table += '</tbody></table></div>';
 
-  const spanPupils = deltaHTML(last.pupils, first.pupils, 'уч.');
-  const spanRev = deltaHTML(last.revenue, first.revenue, '₽');
+  const lines = rows.map(r => (r.kind === 'план'
+    ? `<b>${fmtMonth(r.m)}</b> — план по выставленным абонементам: ${r.pupils} учеников, ${fmt(r.revenue)}, прибыль ${fmt(r.profit)}.`
+    : `<b>${fmtMonth(r.m)}</b> — факт по CRM: ${r.pupils} учеников, ${fmt(r.revenue)}, прибыль ${fmt(r.profit)}.`)).join('<br>');
   const summary = `<div style="background:var(--gray-50);border-radius:12px;padding:12px 14px;font-size:13px;color:var(--gray-600);line-height:1.7;margin-top:14px">
-    За ${rows.length} ${rows.length < 5 ? 'месяца' : 'месяцев'} — с ${fmtMonth(first.m).toLowerCase()} по ${fmtMonth(last.m).toLowerCase()}:
-    ученики ${spanPupils}, выручка ${spanRev}.<br>
-    Последний месяц: фонд педагогов ${fmt(last.fot)}, фиксированные ${fmt(last.fixed)}, из них налоги ${fmt(last.taxes)} и кредит ${fmt(last.loans)}.
+    ${lines}<br>
+    Расходы (${fmtMonth(last.m).toLowerCase()}): фонд педагогов ${fmt(last.fot)}, фиксированные ${fmt(last.fixed)}, из них налоги ${fmt(last.taxes)} и кредит ${fmt(last.loans)}.
   </div>`;
 
   body.innerHTML = legend + chartSVG(rows) + table + summary;
