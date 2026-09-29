@@ -73,6 +73,7 @@ table.rep tr.d td:last-child{color:#0a7a68;font-weight:600}
 .noresp{color:#E8740A;font-weight:700}
 .plwho{font-size:11.5px;color:#4a4a58;margin-top:2px;line-height:1.35}
 .plsub{font-size:11px;color:var(--mut)}
+.plwarn{font-size:11px;color:#B45309;margin-top:3px;line-height:1.35}
 .pay .amt{font-family:var(--mono);font-weight:800;font-size:15px;flex:none}
 .pay.ok .amt{color:var(--green)}.pay.no .amt{color:var(--mut)}
 .mhd{display:flex;align-items:baseline;justify-content:space-between;gap:10px;margin:16px 2px 8px;padding-bottom:6px;border-bottom:2px solid var(--p)}
@@ -396,7 +397,9 @@ function renderPay(){
       pane.appendChild(el("div",{class:"pay "+(ok?"ok":"no")},[
         el("div",{class:"d",text:fmtDate(p.date)}),
         el("div",{class:"pl"},[document.createTextNode(p.label),
-          el("div",{class:"plsub",text:ok?("пришло: "+p.attendees+" · "+mn+" мин"+(p.est?" (по расписанию)":"")):"не состоялась / не отмечено"}),
+          el("div",{class:"plsub",text:ok?("пришло: "+p.attendees+" · "+mn+" мин"):"не состоялась / не отмечено"}),
+          (ok&&p.est)?el("div",{class:"plwarn",text:"⚠️ урока нет в расписании CRM — минуты взяты по умолчанию"}):null,
+          (ok&&p.attendees>=8)?el("div",{class:"plwarn",text:"⚠️ отмечена почти вся группа ("+p.attendees+") — так отработки не ходят, проверьте отметки"}):null,
           (ok&&p.who&&p.who.length)?el("div",{class:"plwho",text:p.who.join(", ")}):null]),
         el("div",{class:"amt",text:ok?rub(r):"—"})
       ]));
