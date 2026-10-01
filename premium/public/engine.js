@@ -1,6 +1,9 @@
 
 var FAMILY_SYNC='https://functions.yandexcloud.net/d4eebjc2qs4ku5ijpn8j', famTimer=null, famLast={};
 const DEPOSIT = 2500;
+const OWNER_TEACHER = 'Оксана Синцова';          // себе отпускные не откладываем — это и так мои деньги
+const ADMIN_SUMMER = 120000;                      // Наталье за лето: 40 000 × 3 месяца (работа с телефоном)
+const ADMIN_SUMMER_MONTHS = 9;                    // копим с сентября по май
 const ADMIN_MIN = 80000;
 const ADMIN_PCT = 0.05;
 const TEACHER_PCT = 0.25;
@@ -513,13 +516,14 @@ function calcGroup(i, ym) {
   const noshow = mr ? noShowGroup(i, ym) - transferAdjGroup(i, ym) : 0;   // выбывшие без уроков; переводы — до полного абонемента
   const early = mr ? earlyGroup(i, ym) : 0;                  // ранняя оплата сентября по старой цене
   const revenue = Math.max(0, gross - noshow - abonDiscGroup(i, ym) - early);   // минус скидки длинных абонементов и ранней оплаты
+  const dep = g.teacher === OWNER_TEACHER ? 0 : DEPOSIT;   // свои группы — без отпускного депозита
   if (g.hourly) {                                   // фиксированная ставка за час, а не доля выручки
     const hands = g.hourly * (g.hoursPerMonth || 8);
-    return { revenue, fot: hands + DEPOSIT, hands, deposit: DEPOSIT };
+    return { revenue, fot: hands + dep, hands, deposit: dep };
   }
   const fot = Math.round(revenue * TEACHER_PCT);
-  const hands = fot - DEPOSIT;
-  return { revenue, fot, hands: Math.max(0, hands), deposit: DEPOSIT };
+  const hands = fot - dep;
+  return { revenue, fot, hands: Math.max(0, hands), deposit: dep };
 }
 
 // «За какой месяц» из комментария оплаты. Месяц — ОТДЕЛЬНЫМ словом (раньше «ма» ловило «Мария»,
@@ -873,6 +877,11 @@ function render() {
     ownerDeposit += c.deposit;
   });
 
+  // Лето администратору: 120 000 за июнь–август (по 40 000), копим с сентября по май.
+  const mNum = +picker.value.slice(5, 7);
+  const adminSummerSave = (mNum >= 6 && mNum <= 8) ? 0 : Math.round(ADMIN_SUMMER / ADMIN_SUMMER_MONTHS);
+  totalDeposit += adminSummerSave;
+
   // база администратора = выручка + возврат абонементных скидок (активных в выбранном месяце)
   const adminBase = totalRevenue + adminAbonback();
   const adminPct = Math.round(adminBase * ADMIN_PCT);
@@ -952,7 +961,10 @@ function render() {
     'Без моей ЗП ' + fmt(ownerHands) + ' и без отпускного депозита ' + fmt(totalDeposit);
   const activeGroups = GROUPS.filter((g, i) => isActive(i)).length;
   document.getElementById('totalDeposit').textContent = fmt(totalDeposit);
-  document.getElementById('depositYearly').textContent = activeGroups + ' активных групп · за 9 мес: ' + fmt(totalDeposit * 9);
+  const depGroups = GROUPS.filter((g, i) => isActive(i) && g.teacher !== OWNER_TEACHER).length;
+  document.getElementById('depositYearly').textContent =
+    'Педагогам ' + fmt(totalDeposit - adminSummerSave) + ' (' + depGroups + ' групп × ' + fmt(DEPOSIT) + ')'
+    + (adminSummerSave ? ' + лето админу ' + fmt(adminSummerSave) : '') + ' · за 9 мес: ' + fmt(totalDeposit * 9);
   document.getElementById('adminPay').textContent = fmt(adminPay);
   document.getElementById('adminNote').textContent = '5% от ' + fmt(adminBase)
     + (adminBase !== totalRevenue ? ' (выручка + скидки абонементов' + (monthCrm(picker.value) && earlyMonth() ? ' и ранней оплаты' : '') + ' ' + fmt(adminBase - totalRevenue) + ')' : '')
