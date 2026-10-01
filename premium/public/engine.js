@@ -962,9 +962,20 @@ function render() {
   const activeGroups = GROUPS.filter((g, i) => isActive(i)).length;
   document.getElementById('totalDeposit').textContent = fmt(totalDeposit);
   const depGroups = GROUPS.filter((g, i) => isActive(i) && g.teacher !== OWNER_TEACHER).length;
+  // Банк снимает 5% автоматически, но только с того, что пришло НА СЧЁТ (приложение и терминал);
+  // оплаты «с карты на карту» и наличные идут мимо. Показываем, сколько доложить руками.
+  const wNow = (payByMonth() || {}).ways || {};
+  const wm = wNow[picker.value] || null;
+  let depNote = '';
+  if (wm) {
+    const toAccount = Object.keys(wm).reduce((a, k) => a + (/приложени|терминал|сбп|эквайринг/i.test(k) ? wm[k] : 0), 0);
+    const auto = Math.round(toAccount * 0.05);
+    const gap = totalDeposit - auto;
+    depNote = ' · 5% со счёта ≈ ' + fmt(auto) + (gap > 0 ? ' → доложить ' + fmt(gap) : (gap < 0 ? ' → с запасом ' + fmt(-gap) : ''));
+  }
   document.getElementById('depositYearly').textContent =
     'Педагогам ' + fmt(totalDeposit - adminSummerSave) + ' (' + depGroups + ' групп × ' + fmt(DEPOSIT) + ')'
-    + (adminSummerSave ? ' + лето админу ' + fmt(adminSummerSave) : '') + ' · за 9 мес: ' + fmt(totalDeposit * 9);
+    + (adminSummerSave ? ' + лето админу ' + fmt(adminSummerSave) : '') + depNote;
   document.getElementById('adminPay').textContent = fmt(adminPay);
   document.getElementById('adminNote').textContent = '5% от ' + fmt(adminBase)
     + (adminBase !== totalRevenue ? ' (выручка + скидки абонементов' + (monthCrm(picker.value) && earlyMonth() ? ' и ранней оплаты' : '') + ' ' + fmt(adminBase - totalRevenue) + ')' : '')
