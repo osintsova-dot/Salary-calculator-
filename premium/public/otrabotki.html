@@ -388,6 +388,8 @@ function renderPay(){
     var rows=byM[ym].slice().sort(function(a,b){return (a.date+a.lk).localeCompare(b.date+b.lk);});
     var mTot=0;
     rows.forEach(function(p){if(p.conducted)mTot+=rateFor(p);});
+    var ext=((DATA.extra||{})[ym])||[];
+    ext.forEach(function(e){mTot+=(+e.sum||0);});
     pane.appendChild(el("div",{class:"mhd"},[
       el("div",{class:"mnm",text:monthName(ym)}),
       el("div",{class:"msum",text:rub(mTot)})
@@ -402,6 +404,14 @@ function renderPay(){
           (ok&&p.attendees>=8)?el("div",{class:"plwarn",text:"⚠️ отмечена почти вся группа ("+p.attendees+") — так отработки не ходят, проверьте отметки"}):null,
           (ok&&p.who&&p.who.length)?el("div",{class:"plwho",text:p.who.join(", ")}):null]),
         el("div",{class:"amt",text:ok?rub(r):"—"})
+      ]));
+    });
+    ext.forEach(function(e){
+      pane.appendChild(el("div",{class:"pay ok"},[
+        el("div",{class:"d",text:"доплата"}),
+        el("div",{class:"pl"},[document.createTextNode(e.note||"доплата"),
+          el("div",{class:"plsub",text:"вне журнала — внесено вручную"})]),
+        el("div",{class:"amt",text:rub(+e.sum||0)})
       ]));
     });
   });

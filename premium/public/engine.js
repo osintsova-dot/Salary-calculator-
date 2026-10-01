@@ -733,6 +733,15 @@ async function fetchOtrSavings(){
     const MONTHS=['январь','февраль','март','апрель','май','июнь','июль','август','сентябрь','октябрь','ноябрь','декабрь'];
     const byM={}; let gRefund=0,gInga=0,gClosed=0,gSlots=0;
     const byMonthCnt={};                       // ym -> {o60, o90} — число проведённых отработок по длительности
+    // ручные доплаты Инге (индивидуальные отработки и прочее вне журнала)
+    Object.keys(d.extra||{}).forEach(function(ym){
+      var sum=(d.extra[ym]||[]).reduce(function(a,r){return a+(+r.sum||0);},0);
+      if(!sum) return;
+      var cc=byMonthCnt[ym]||(byMonthCnt[ym]={o60:0,o90:0,pay:0});
+      cc.pay+=sum;
+      var m=byM[ym]||(byM[ym]={refund:0,inga:0,closed:0,slots:0});
+      m.inga+=sum; gInga+=sum;
+    });
     d.payLessons.forEach(function(p){
       if(!p.conducted) return;
       const ym=(p.date||'').slice(0,7);
