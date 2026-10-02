@@ -935,7 +935,8 @@ function render() {
   const stParts = (creditsState.start || '2026-09').split('-');
   document.getElementById('creditNote').textContent =
     creditN + ' взносов начиная с ' + stParts[1] + '.' + stParts[0] +
-    '. По графику ' + fmt(creditGraph) + '/мес, сверх графика +' + fmt(creditExtra) + '/мес. С ' + tgtParts[1] + '.' + tgtParts[0] + ' кредитов нет — освобождается ' + fmt(creditGraph) + '/мес навсегда.';
+    '. По графику ' + fmt(creditGraph) + '/мес (обязательно), сверх графика +' + fmt(creditExtra) + '/мес — это твой выбор темпа. С '
+    + tgtParts[1] + '.' + tgtParts[0] + ' кредитов нет: перестаёт уходить вся сумма ' + fmt(creditGraph + creditExtra) + '/мес.';
   const fixedTotal = adminPay + fixedState.cleaning + fixedState.smm + fixedState.rent + otrabotkiPay + taxPay + bankPay + costPay + loanPay + totalDeposit;
   const totalAllPay = totalHands + fixedTotal;
 
