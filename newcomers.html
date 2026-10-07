@@ -477,6 +477,8 @@ function render(){
     stat.innerHTML="";
     return;
   }
+  // учебные группы из карточки CRM (строка «Give me five 2C, консультация GMF 2C») — без консультаций
+  function realGroups(str){return String(str||"").split(",").map(function(t){return t.trim();}).filter(function(t){return t&&!/консультац/i.test(t);});}
   var from=document.getElementById("from").value||"2026-05-01";
   // состав групп: имя → группы (из закладки «BigBen → оплаты»)
   var byName={};
@@ -498,7 +500,7 @@ function render(){
   list.forEach(function(x){
     var g=byName[x[0]];
     // состав из закладки «оплаты» может отставать — группа из карточки CRM (x[2], приходит с сервера каждый день) тоже считается
-    (g&&g.length||(x[2]&&!/консультац/i.test(x[2]))?inG:out).push(x);
+    (g&&g.length||realGroups(x[2]).length?inG:out).push(x);
   });
   var byMonth={};
   list.forEach(function(x){var k=x[1].slice(0,7);byMonth[k]=(byMonth[k]||0)+1;});
@@ -520,12 +522,12 @@ function render(){
       var gs=byName[x[0]]||[];
       var uid=uidByName[x[0]];
       var paid=uid&&uidPaid[uid];
-      var crmG=x[2]&&!/консультац/i.test(x[2]);
+      var crmG=realGroups(x[2]).length>0;
       var tag=noRoster?'<span class="pill warn">состав групп не загружен</span>'
               :!gs.length?(crmG?'<span class="pill ok">в группе по CRM</span>':'<span class="pill warn">нет в группах</span>')
               :(paid?'<span class="pill ok">оплата есть</span>':'<span class="pill bad">оплат нет</span>');
       html+='<div class="row"><div><div class="name">'+esc(x[0])+'</div>'+
-        '<div class="meta">заведён '+fmtD(x[1])+(gs.length?(' · '+esc(gs.map(function(g){return g.g+(g.add?" с "+fmtD(g.add):"");}).join(", "))):(x[2]?' · в карточке: '+esc(x[2]):''))+'</div></div>'+
+        '<div class="meta">заведён '+fmtD(x[1])+(gs.length?(' · '+esc(gs.map(function(g){return g.g+(g.add?" с "+fmtD(g.add):"");}).join(", "))):(realGroups(x[2]).length?' · по CRM: '+esc(realGroups(x[2]).join(", ")):(x[2]?' · в карточке: '+esc(x[2]):'')))+'</div></div>'+
         tag+'</div>';
     });
     html+='</div>';
