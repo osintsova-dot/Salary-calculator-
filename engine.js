@@ -523,8 +523,10 @@ function calcGroup(i, ym) {
   const revenue = Math.max(0, gross - noshow - abonDiscGroup(i, ym) - early);   // минус скидки длинных абонементов и ранней оплаты
   const dep = g.teacher === OWNER_TEACHER ? 0 : DEPOSIT;   // свои группы — без отпускного депозита
   if (g.hourly) {                                   // фиксированная ставка за час, а не доля выручки
-    const hands = g.hourly * (g.hoursPerMonth || 8);
-    return { revenue, fot: hands + dep, hands, deposit: dep };
+    // Ставка — это всё, что стоит группа педагогу: отпускные 2 500 откладываются ИЗНУТРИ неё,
+    // как и у процентных групп (решение Оксаны 07.10.2026), а не сверху.
+    const fot = g.hourly * (g.hoursPerMonth || 8);
+    return { revenue, fot, hands: Math.max(0, fot - dep), deposit: dep };
   }
   const fot = Math.round(revenue * TEACHER_PCT);
   const hands = fot - dep;
