@@ -442,7 +442,9 @@ const GROUPS = [
   { teacher: 'Ксения Шиллер', name: 'Prepare 4A',     dur: 90, pupils: 11 },
   { teacher: 'Ксения Шиллер', name: 'Prepare 5A',     dur: 90, pupils: 11 },
   { teacher: 'Ксения Шиллер', name: 'GMF 2C',         dur: 60, pupils: 0  },
-  { teacher: 'Ксения Шиллер', name: 'GMF 2D',         dur: 60, pupils: 0  },
+  // GMF 2D удалена из CRM 07.10.2026 и запускаться не будет. Слот оставлен (gone), чтобы не сдвинуть
+  // индексы групп ниже — по ним хранятся ученики, выручка CRM и сохранённые месяцы.
+  { teacher: 'Ксения Шиллер', name: 'GMF 2D',         dur: 60, pupils: 0, gone: true },
   // Оксана Синцова
   { teacher: 'Оксана Синцова', name: 'Mimi 3',       dur: 60, pupils: 6  },
   { teacher: 'Оксана Синцова', name: 'GMF 1A',        dur: 60, pupils: 9  },
@@ -487,6 +489,7 @@ function monthCrm(ym) {
 // нет данных CRM (прогноз) — если есть ученики. Плюс ручное выключение на этот месяц.
 function isActive(i, ym) {
   ym = ym || curYM();
+  if (GROUPS[i].gone) return false;                           // группа закрыта/удалена из CRM — нигде не считается
   if (GROUPS[i].from && ym < GROUPS[i].from) return false;   // группа ещё не началась
   if (state.offM[ym] && state.offM[ym][i]) return false;
   const mr = monthCrm(ym);
@@ -1083,7 +1086,7 @@ function render() {
 
   // Potential banner
   const gap = totalPotential - totalRevenue;
-  const emptyGroups = GROUPS.filter((g, i) => (state.pupils[i] || 0) === 0).length;
+  const emptyGroups = GROUPS.filter((g, i) => !g.gone && (state.pupils[i] || 0) === 0).length;
   document.getElementById('potentialText').innerHTML =
     `При полном наборе (12 учеников) выручка школы составит <strong>${fmt(totalPotential)}</strong>. ` +
     `Потенциал роста: <strong>+${fmt(gap)}/мес</strong>` +
@@ -1125,7 +1128,7 @@ function render() {
   teachers.forEach(teacher => {
     // группу, которая ещё не началась, в таблице месяца не показываем
     const tGroups = GROUPS.map((g, i) => ({ ...g, i }))
-      .filter(g => g.teacher === teacher && !(g.from && picker.value < g.from));
+      .filter(g => g.teacher === teacher && !g.gone && !(g.from && picker.value < g.from));
     let tRevenue = 0, tFot = 0, tHands = 0, tDeposit = 0, tPupils = 0;
 
     tGroups.forEach(g => {
@@ -1551,7 +1554,7 @@ function slipHistory(teacher) {
   if (keys.length === 0) return '';
 
   const color = TEACHER_COLORS[teacher];
-  const tGroupIdxs = GROUPS.map((g, i) => ({...g, i})).filter(g => g.teacher === teacher);
+  const tGroupIdxs = GROUPS.map((g, i) => ({...g, i})).filter(g => g.teacher === teacher && !g.gone);
 
   const rows = keys.map(month => {
     const rec = monthSnapshot(h[month]);
@@ -2192,10 +2195,10 @@ function bbNorm(name) {
 // BigBen называет группы без буквы потока (PREPARE 3), в калькуляторе — с буквой (Prepare 3A).
 function bbMatch(bbName) {
   const key = bbNorm(bbName);
-  let idx = GROUPS.findIndex(g => bbNorm(g.name) === key);
+  let idx = GROUPS.findIndex(g => !g.gone && bbNorm(g.name) === key);
   if (idx >= 0) return idx;
-  const loose = GROUPS.map((g, i) => ({ i, n: bbNorm(g.name) }))
-                      .filter(o => o.n.length === key.length + 1 && o.n.startsWith(key));
+  const loose = GROUPS.map((g, i) => ({ i, n: bbNorm(g.name), gone: g.gone }))
+                      .filter(o => !o.gone && o.n.length === key.length + 1 && o.n.startsWith(key));
   return loose.length === 1 ? loose[0].i : -1;
 }
 
@@ -2266,7 +2269,7 @@ function applyBigBen(rawList) {
     document.body.appendChild(n); setTimeout(() => n.remove(), 15000);
   }
   if (Object.keys(crmPupils).length) state.crmPupils = crmPupils;   // актуальный состав из CRM — для всех месяцев учебного года
-  GROUPS.forEach((g, i) => { if (!touched.has(i)) missed.push(g.name); });
+  GROUPS.forEach((g, i) => { if (!g.gone && !touched.has(i)) missed.push(g.name); });
   render();
   localStorage.setItem('ss_salary_state', JSON.stringify(state));
 
