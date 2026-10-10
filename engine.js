@@ -500,14 +500,15 @@ function isActive(i, ym) {
   if (mr) return (+mr[i] || 0) > 0;
   return (state.pupils[i] || 0) > 0;
 }
-// Начислено в CRM больше, чем ученики × тариф (с запасом 2%): цена группы в CRM стоит не за месяц,
-// а за урок, или абонемент задвоен. 10.10.2026 так «Китайский» дал 437 200 вместо ~56 000.
+// Начислено в CRM больше, чем (ученики + 2) × тариф: цена группы в CRM стоит не за месяц, а за урок,
+// или абонемент задвоен. 10.10.2026 так «Китайский» дал 437 200 вместо ~56 000. Запас в два ребёнка —
+// потому что в отчёте остаются ушедшие в середине месяца, а в составе их уже нет (GMF 3A: 65 600 при 8 × 8 000).
 function crmOver(i, ym) {
   const mr = monthCrm(ym);
   const p = state.pupils[i] || 0;
   if (!mr || !p) return 0;
   const rub = +mr[i] || 0, full = p * TARIFF[GROUPS[i].dur];
-  return rub > full * 1.02 ? rub : 0;
+  return rub > full + 2 * TARIFF[GROUPS[i].dur] ? rub : 0;
 }
 function crmMissing(i, ym) {           // группа с учениками, но без начислений в CRM за месяц
   const mr = monthCrm(ym);
@@ -2276,7 +2277,7 @@ function applyBigBen(rawList) {
       const full = pupils * TARIFF[GROUPS[i].dur];
       const note = cell ? (cell[1] ? ', со скидкой: ' + cell[1] : '') + (cell[2] ? ', бесплатно: ' + cell[2] : '') : '';
       money.push(GROUPS[i].name + ': ' + fmt(rub) + (full !== rub ? ' (без скидок ' + fmt(full) + ')' : '') + note);
-      if (rub > full * 1.02) over.push(GROUPS[i].name + ': в CRM начислено ' + fmt(rub) + ', а по тарифу максимум ' + fmt(full) + ' (' + pupils + ' × ' + fmt(TARIFF[GROUPS[i].dur]) + ')');
+      if (rub > full + 2 * TARIFF[GROUPS[i].dur]) over.push(GROUPS[i].name + ': в CRM начислено ' + fmt(rub) + ', а по тарифу максимум ' + fmt(full) + ' (' + pupils + ' × ' + fmt(TARIFF[GROUPS[i].dur]) + ')');
     }
   });
   if (oldBookmark) {
