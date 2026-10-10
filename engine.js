@@ -454,7 +454,8 @@ const GROUPS = [
   { teacher: 'Оксана Синцова', name: 'Genki 1B',      dur: 60, pupils: 0, gone: true },
   // Китайский: оплата педагогу не 25%, а 2 500 ₽ за проведённый час (8 часов в месяц).
   // Стартует в октябре; пока в CRM группы нет, она сама остаётся неактивной.
-  { teacher: 'Ксения Шиллер', name: 'Китайский 1',   dur: 60, pupils: 0, from: '2026-10', hourly: 2500, hoursPerMonth: 8 },
+  // addon: второй курс — эти дети уже ходят в английские группы, в подписи «N учеников» считаются отдельно.
+  { teacher: 'Ксения Шиллер', name: 'Китайский 1',   dur: 60, pupils: 0, from: '2026-10', hourly: 2500, hoursPerMonth: 8, addon: 'китайский' },
   // В CRM группа называется «Genki English» (bbNorm → «genki»), идёт с октября 2026.
   { teacher: 'Оксана Синцова', name: 'Genki English', dur: 60, pupils: 0, from: '2026-10' },
 ];
@@ -964,7 +965,13 @@ function render() {
   // Summary cards
   document.getElementById('totalRevenue').textContent = fmt(totalRevenue);
   const crmNow = monthCrm(picker.value);
-  document.getElementById('totalPupils').textContent = totalPupils + ' учеников в ' + GROUPS.filter((g, i) => isActive(i)).length + ' группах'
+  // Второй курс (китайский) — те же дети, что и в английских группах: показываем отдельно, чтобы
+  // «N учеников» значило живых детей школы, а не места. Выручка при этом включает всё.
+  const addonP = {}, addonG = {};
+  GROUPS.forEach((g, i) => { if (g.addon && isActive(i)) { addonP[g.addon] = (addonP[g.addon] || 0) + (state.pupils[i] || 0); addonG[g.addon] = (addonG[g.addon] || 0) + 1; } });
+  const addonPupils = Object.values(addonP).reduce((a, b) => a + b, 0), addonGroups = Object.values(addonG).reduce((a, b) => a + b, 0);
+  const addonText = Object.keys(addonP).map(k => ' + ' + k + ' ' + addonP[k]).join('');
+  document.getElementById('totalPupils').textContent = (totalPupils - addonPupils) + ' учеников в ' + (GROUPS.filter((g, i) => isActive(i)).length - addonGroups) + ' группах' + addonText
     + (crmNow ? ((state.crmOldM || {})[picker.value] ? ' · ⚠️ по урокам — обнови закладку «BigBen → калькулятор»' : ' · из CRM, по абонементам') : ' · ⚠️ прогноз по тарифу: в CRM нет начислений за месяц')
     + (crmNow && noShowMonth().length ? ' · не считаем ' + noShowMonth().length + ' выбывших без уроков (−' + fmt(noShowMonth().reduce((a, e) => a + e.sum, 0)) + ')' : '');
   document.getElementById('totalFot').textContent = fmt(totalFot);
