@@ -448,11 +448,15 @@ const GROUPS = [
   // Оксана Синцова
   { teacher: 'Оксана Синцова', name: 'Mimi 3',       dur: 60, pupils: 6  },
   { teacher: 'Оксана Синцова', name: 'GMF 1A',        dur: 60, pupils: 9  },
-  { teacher: 'Оксана Синцова', name: 'Genki 1A',      dur: 60, pupils: 0  },
-  { teacher: 'Оксана Синцова', name: 'Genki 1B',      dur: 60, pupils: 0  },
+  // Genki 1A и 1B объединены в CRM в одну группу «Genki English» (10.10.2026). Начислений у них
+  // не было ни за один месяц, поэтому просто закрыты флагом gone (индексы не сдвигать!).
+  { teacher: 'Оксана Синцова', name: 'Genki 1A',      dur: 60, pupils: 0, gone: true },
+  { teacher: 'Оксана Синцова', name: 'Genki 1B',      dur: 60, pupils: 0, gone: true },
   // Китайский: оплата педагогу не 25%, а 2 500 ₽ за проведённый час (8 часов в месяц).
   // Стартует в октябре; пока в CRM группы нет, она сама остаётся неактивной.
   { teacher: 'Ксения Шиллер', name: 'Китайский 1',   dur: 60, pupils: 0, from: '2026-10', hourly: 2500, hoursPerMonth: 8 },
+  // В CRM группа называется «Genki English» (bbNorm → «genki»), идёт с октября 2026.
+  { teacher: 'Оксана Синцова', name: 'Genki English', dur: 60, pupils: 0, from: '2026-10' },
 ];
 
 const TEACHER_COLORS = {
@@ -495,6 +499,15 @@ function isActive(i, ym) {
   const mr = monthCrm(ym);
   if (mr) return (+mr[i] || 0) > 0;
   return (state.pupils[i] || 0) > 0;
+}
+// Начислено в CRM больше, чем ученики × тариф (с запасом 2%): цена группы в CRM стоит не за месяц,
+// а за урок, или абонемент задвоен. 10.10.2026 так «Китайский» дал 437 200 вместо ~56 000.
+function crmOver(i, ym) {
+  const mr = monthCrm(ym);
+  const p = state.pupils[i] || 0;
+  if (!mr || !p) return 0;
+  const rub = +mr[i] || 0, full = p * TARIFF[GROUPS[i].dur];
+  return rub > full * 1.02 ? rub : 0;
 }
 function crmMissing(i, ym) {           // группа с учениками, но без начислений в CRM за месяц
   const mr = monthCrm(ym);
@@ -1183,6 +1196,7 @@ function render() {
     tGroups.forEach(g => {
       const inactive = !isActive(g.i);
       const missing = crmMissing(g.i);
+      const over = crmOver(g.i);
       const c = inactive ? { revenue: 0, fot: 0, deposit: 0, hands: 0 } : calcGroup(g.i);
       const p = state.pupils[g.i] || 0;
       const tr = document.createElement('tr');
@@ -1191,7 +1205,7 @@ function render() {
         <td class="group-name">
           <label style="display:inline-flex;align-items:center;gap:6px;cursor:pointer" title="${missing ? 'В CRM нет начислений за этот месяц — группа не считается' : 'Снять галочку — группа не идёт в этом месяце'}">
             <input type="checkbox" ${inactive ? '' : 'checked'} ${missing ? 'disabled' : ''} onchange="toggleActive(${g.i}, this.checked)" style="cursor:pointer">
-            <span class="pupils-status ${statusDot(p)}"></span>${g.name}${missing ? ' <span style="color:#E8740A;font-size:11px">· нет начислений в CRM</span>' : ''}
+            <span class="pupils-status ${statusDot(p)}"></span>${g.name}${missing ? ' <span style="color:#E8740A;font-size:11px">· нет начислений в CRM</span>' : ''}${over ? ' <span style="color:#DC2626;font-size:11px" title="В CRM начислено ' + fmt(over) + ', а по тарифу максимум ' + fmt((state.pupils[g.i] || 0) * TARIFF[g.dur]) + '. Проверь цену группы в CRM.">⚠️ в CRM больше тарифа</span>' : ''}
           </label>
         </td>
         <td><span class="badge badge-${g.dur}">${g.dur} мин</span></td>
@@ -2205,7 +2219,7 @@ function bbMatch(bbName) {
 }
 
 function applyBigBen(rawList) {
-  const changed = [], same = [], unknown = [], missed = [], money = [];
+  const changed = [], same = [], unknown = [], missed = [], money = [], over = [];
   const touched = new Set();
   const crmPupils = {};
   if (!state.crmRev) state.crmRev = {};
@@ -2262,6 +2276,7 @@ function applyBigBen(rawList) {
       const full = pupils * TARIFF[GROUPS[i].dur];
       const note = cell ? (cell[1] ? ', со скидкой: ' + cell[1] : '') + (cell[2] ? ', бесплатно: ' + cell[2] : '') : '';
       money.push(GROUPS[i].name + ': ' + fmt(rub) + (full !== rub ? ' (без скидок ' + fmt(full) + ')' : '') + note);
+      if (rub > full * 1.02) over.push(GROUPS[i].name + ': в CRM начислено ' + fmt(rub) + ', а по тарифу максимум ' + fmt(full) + ' (' + pupils + ' × ' + fmt(TARIFF[GROUPS[i].dur]) + ')');
     }
   });
   if (oldBookmark) {
@@ -2269,6 +2284,12 @@ function applyBigBen(rawList) {
     n.style.cssText = 'position:fixed;left:50%;top:14px;transform:translateX(-50%);z-index:9999;background:#E8740A;color:#fff;padding:12px 18px;border-radius:12px;font:700 13px var(--font);box-shadow:0 6px 20px rgba(0,0,0,.25);max-width:92vw;text-align:center';
     n.innerHTML = '⚠️ Это СТАРАЯ закладка — она считает по урокам.<br>Выручку не тронула. Обнови страницу (⌘⇧R) и перетащи закладку заново из «⬇️ Из BigBen».';
     document.body.appendChild(n); setTimeout(() => n.remove(), 15000);
+  }
+  if (over.length) {
+    const n = document.createElement('div');
+    n.style.cssText = 'position:fixed;left:50%;top:14px;transform:translateX(-50%);z-index:9999;background:#DC2626;color:#fff;padding:12px 18px;border-radius:12px;font:700 13px var(--font);box-shadow:0 6px 20px rgba(0,0,0,.25);max-width:92vw;text-align:center';
+    n.innerHTML = '⚠️ В CRM начислено больше тарифа:<br>' + over.join('<br>') + '<br><span style="font-weight:400">Скорее всего, цена группы в CRM стоит за урок, а не за месяц. Выручка взята как есть — проверь.</span>';
+    document.body.appendChild(n); setTimeout(() => n.remove(), 25000);
   }
   if (Object.keys(crmPupils).length) state.crmPupils = crmPupils;   // актуальный состав из CRM — для всех месяцев учебного года
   GROUPS.forEach((g, i) => { if (!g.gone && !touched.has(i)) missed.push(g.name); });
@@ -2288,6 +2309,7 @@ function applyBigBen(rawList) {
       block('Выручка из CRM, со скидками', money, 'var(--purple)', money.length) +
       block('Изменилось', changed, 'var(--purple)', changed.length) +
       block('Без изменений', [same.join(', ')].filter(x => x), 'var(--gray-600)', same.length) +
+      block('⚠️ Начислено больше тарифа — проверь цену в CRM', over, '#DC2626', over.length) +
       block('Нет в калькуляторе', unknown, '#E8740A', unknown.length) +
       block('Не пришли из BigBen', [missed.join(', ')].filter(x => x), '#E8740A', missed.length) +
       '</div>';
