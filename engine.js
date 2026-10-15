@@ -606,6 +606,9 @@ function invMonths(from, to) {
   const a = ruDate(from), b = ruDate(to);
   if (!a || !b) return [];
   if (b <= a) return [ymOf(a)];
+  // Помесячный автосчёт = оплата за месяц, в котором период КОНЧАЕТСЯ: 21.09–16.10 — октябрь, 17.10–13.11 — ноябрь.
+  // По большинству дней следующий счёт (17.10–13.11) попадал в октябрь и раздувал «не оплачено» (15.10.2026).
+  if ((b - a) / 864e5 <= 35) return [ymOf(new Date(b.getTime() - 3 * 864e5))];
   if ((b - a) / 864e5 <= 70) {                       // обычный счёт (в т.ч. на 1,5 месяца по урокам)
     const cnt = {};
     for (let t = a.getTime(); t < b.getTime(); t += 864e5) { const k = ymOf(new Date(t)); cnt[k] = (cnt[k] || 0) + 1; }
