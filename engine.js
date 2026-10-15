@@ -830,7 +830,9 @@ function renderFinance() {
   const debtTotal=localStorage.getItem('ss_debt_total');
   const debtCount=localStorage.getItem('ss_debt_count');
   if(de){
-    const dm = debtMap[ym];
+    // Долг месяца — из тех же счетов, что «Оплачено» (месяц = конец периода счёта), если они загружены.
+    // Список должников CRM раскладывал новые ноябрьские автосчета (17.10–13.11) в октябрь.
+    const dm = pb ? Math.round(pb.unpaid[ym] || 0) : debtMap[ym];
     // Главная цифра — долг ЗА ВЫБРАННЫЙ МЕСЯЦ, общий по школе уходит в подпись:
     // иначе в сентябре видна полуторамиллионная сумма, в которой почти весь долг — октябрьский.
     if(dm!=null){
