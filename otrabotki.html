@@ -38,6 +38,15 @@ header .sub{font-size:12px;opacity:.9;margin-top:3px}
 .stu .meta{font-size:11px;color:var(--mut)}
 .stu .btns{display:flex;gap:5px;flex:none}
 .mbtn{border:1.5px solid var(--line);background:#fff;border-radius:10px;padding:7px 10px;font-family:var(--font);font-size:12px;font-weight:700;cursor:pointer;color:var(--mut)}
+.inv{padding:10px 14px 12px;display:flex;flex-direction:column;gap:8px}
+.inv .ibtn{border:none;background:var(--p);color:#fff;border-radius:10px;padding:10px 12px;font-family:var(--font);font-size:13px;font-weight:800;cursor:pointer;align-self:flex-start}
+.inv .ibtn.alt{background:#fff;color:var(--p);border:1.5px solid var(--line)}
+.inv .ibtn:disabled{opacity:.55;cursor:default}
+.inv input{border:1.5px solid var(--line);border-radius:10px;padding:9px 10px;font-size:15px;font-family:var(--font)}
+.inv .prev{white-space:pre-line;font-size:12.5px;line-height:1.45;background:#faf8ff;border:1px dashed var(--line);border-radius:10px;padding:10px;color:var(--ink)}
+.inv .imsg{font-size:12.5px;line-height:1.45;white-space:pre-line}
+.inv .imsg.ok{color:var(--green)} .inv .imsg.err{color:var(--red)}
+.inv .row{display:flex;gap:8px;flex-wrap:wrap}
 .mbtn.come.on{background:var(--green);border-color:var(--green);color:#fff}
 .mbtn.no.on{background:var(--mut);border-color:var(--mut);color:#fff}
 
@@ -323,6 +332,50 @@ function mark(uid,m){
   renderLists();
 }
 
+// ---- «Написать пропустившим»: приглашение на отработку каждой семье в её мессенджер (бот школы) ----
+var INV_URLS=["https://d5d6o4mldv5m1nj5hvih.6brbn2wz.apigw.yandexcloud.net/nihao/otr/invite","https://nihao-bot.o-sintsova.workers.dev/otr/invite"];
+function invPost(body,i){i=i||0;if(i>=INV_URLS.length)return Promise.reject(new Error("net"));
+  var ctl=window.AbortController?new AbortController():null;var tm=setTimeout(function(){ctl&&ctl.abort();},60000);
+  return fetch(INV_URLS[i],{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify(body),signal:ctl&&ctl.signal})
+    .then(function(r){clearTimeout(tm);return r.json();}).catch(function(){clearTimeout(tm);return invPost(body,i+1);});}
+function inviteBox(lk,list){
+  var box=el("div",{class:"inv"});
+  var kids=list.map(function(s){return {uid:String(s.user_id),fio:s.fio,group:s.group,dates:(s.dates&&s.dates.length)?s.dates:(s.date?[s.date]:[])};});
+  function code(){try{return localStorage.getItem("ss_icode")||"";}catch(e){return "";}}
+  function msg(t,c){var m=el("div",{class:"imsg"+(c?" "+c:""),text:t});box.appendChild(m);return m;}
+  function start(){
+    box.textContent="";
+    var b=el("button",{class:"ibtn",text:"📨 Написать пропустившим ("+kids.length+")",onClick:function(){ if(!code()) askCode(); else preview(); }});
+    box.appendChild(b);
+  }
+  function askCode(){
+    box.textContent="";
+    var inp=el("input",{placeholder:"Код для отправки (inga-…)",autocomplete:"off"});
+    box.appendChild(inp);
+    box.appendChild(el("div",{class:"row"},[el("button",{class:"ibtn",text:"Сохранить",onClick:function(){var v=inp.value.trim();if(!v)return;try{localStorage.setItem("ss_icode",v);}catch(e){}preview();}}),el("button",{class:"ibtn alt",text:"Отмена",onClick:start})]));
+  }
+  function preview(){
+    box.textContent="";var w=msg("Готовлю сообщение…");
+    invPost({code:code(),lk:lk,kids:kids,dry:1}).then(function(d){
+      box.textContent="";
+      if(!d||!d.ok){msg((d&&d.error)||"Не получилось","err");if(d&&/код/i.test(d.error||"")){try{localStorage.removeItem("ss_icode");}catch(e){}}box.appendChild(el("button",{class:"ibtn alt",text:"Назад",onClick:start}));return;}
+      msg("Отработка "+d.when+" · "+d.group);
+      if(d.already&&d.already.length) msg("Уже писали на этой неделе: "+d.already.join(", "));
+      if(!d.todo){box.appendChild(el("button",{class:"ibtn alt",text:"Всем уже отправлено",onClick:start}));return;}
+      box.appendChild(el("div",{class:"prev",text:d.sample}));
+      box.appendChild(el("div",{class:"row"},[el("button",{class:"ibtn",text:"Отправить ("+d.todo+")",onClick:send}),el("button",{class:"ibtn alt",text:"Отмена",onClick:start})]));
+    }).catch(function(){box.textContent="";msg("Нет связи с сервером, попробуйте ещё раз.","err");box.appendChild(el("button",{class:"ibtn alt",text:"Назад",onClick:start}));});
+  }
+  function send(){
+    box.textContent="";msg("Отправляю…");
+    invPost({code:code(),lk:lk,kids:kids}).then(function(d){
+      box.textContent="";
+      if(!d||!d.ok){msg((d&&d.error)||"Не получилось","err");box.appendChild(el("button",{class:"ibtn alt",text:"Назад",onClick:start}));return;}
+      msg("✅ Отправлено "+d.sent+" из "+d.total+". Ответы родителей передаст Наталья — отметьте «придёт / не придёт»."+(d.bad&&d.bad.length?"\n⚠️ Не ушло: "+d.bad.join("; ")+" — позвоните или напишите сами.":""),d.bad&&d.bad.length?"err":"ok");
+    }).catch(function(){box.textContent="";msg("Связь оборвалась. Нажмите ещё раз — уже отправленным повторно не уйдёт.","err");box.appendChild(el("button",{class:"ibtn alt",text:"Ещё раз",onClick:preview}));});
+  }
+  start();return box;
+}
 function renderLists(){
   var pane=document.getElementById("paneL");pane.textContent="";
   if(!DATA){pane.textContent="…";return;}
@@ -356,6 +409,7 @@ function renderLists(){
         el("div",{class:"btns"},[bCome,bNo])
       ]));
     });
+    body.insertBefore(inviteBox(lk,list),body.firstChild);
     var badge=el("div",{class:"badge"+(comeN?" come":""),text:comeN?comeN+"/"+list.length:String(list.length)});
     var hd=el("div",{class:"hd"},[el("div",{class:"lbl",text:labels[lk]||lk}),badge,el("div",{class:"chev",text:"▾"})]);
     var slot=el("div",{class:"slot"},[hd,body]);
