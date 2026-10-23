@@ -346,7 +346,7 @@ function inviteBox(lk,list){
   function start(){
     box.textContent="";
     box.appendChild(el("button",{class:"ibtn",text:"📨 Написать пропустившим ("+kids.length+")",onClick:function(){ if(!code()) askCode(); else preview(); }}));
-    box.appendChild(el("div",{class:"imsg",text:"Бот сам пишет накануне в 21:00. Кнопка — чтобы отправить раньше или дописать новых."}));
+    box.appendChild(el("div",{class:"imsg",text:"Бот сам пишет накануне: через час после урока группы (позже 20:30 — сразу после урока; без урока — в 17:00). Кнопка — чтобы отправить раньше или дописать новых."}));
   }
   function askCode(){
     box.textContent="";
