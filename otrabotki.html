@@ -340,13 +340,13 @@ function invPost(body,i){i=i||0;if(i>=INV_URLS.length)return Promise.reject(new 
     .then(function(r){clearTimeout(tm);return r.json();}).catch(function(){clearTimeout(tm);return invPost(body,i+1);});}
 function inviteBox(lk,list){
   var box=el("div",{class:"inv"});
-  var kids=list.map(function(s){return {uid:String(s.user_id),fio:s.fio,group:s.group,dates:(s.dates&&s.dates.length)?s.dates:(s.date?[s.date]:[])};});
+  var kids=list.map(function(s){var ds=(s.dates&&s.dates.length)?s.dates:(s.date?[s.date]:[]),w=s.why||{};return {uid:String(s.user_id),fio:s.fio,group:s.group,dates:ds,nojust:ds.length>0&&ds.every(function(d){return w[d]==="n";})};});
   function code(){try{return localStorage.getItem("ss_icode")||"";}catch(e){return "";}}
   function msg(t,c){var m=el("div",{class:"imsg"+(c?" "+c:""),text:t});box.appendChild(m);return m;}
   function start(){
     box.textContent="";
-    var b=el("button",{class:"ibtn",text:"📨 Написать пропустившим ("+kids.length+")",onClick:function(){ if(!code()) askCode(); else preview(); }});
-    box.appendChild(b);
+    box.appendChild(el("button",{class:"ibtn",text:"📨 Написать пропустившим ("+kids.length+")",onClick:function(){ if(!code()) askCode(); else preview(); }}));
+    box.appendChild(el("div",{class:"imsg",text:"Бот сам пишет накануне в 21:00. Кнопка — чтобы отправить раньше или дописать новых."}));
   }
   function askCode(){
     box.textContent="";
@@ -361,9 +361,10 @@ function inviteBox(lk,list){
       if(!d||!d.ok){msg((d&&d.error)||"Не получилось","err");if(d&&/код/i.test(d.error||"")){try{localStorage.removeItem("ss_icode");}catch(e){}}box.appendChild(el("button",{class:"ibtn alt",text:"Назад",onClick:start}));return;}
       msg("Отработка "+d.when+" · "+d.group);
       if(d.already&&d.already.length) msg("Уже писали на этой неделе: "+d.already.join(", "));
-      if(!d.todo){box.appendChild(el("button",{class:"ibtn alt",text:"Всем уже отправлено",onClick:start}));return;}
+      if(d.nj&&d.nj.length) msg((d.live?"Без справки, отработка уже подтверждена, пригласим сразу: ":"Без справки: ")+d.nj.join(", ")+(d.live?"":" — пригласим автоматически, когда кто-то с уважительной причиной ответит «Да»."));
+      if(!d.todo&&!(d.nj&&d.nj.length)){box.appendChild(el("button",{class:"ibtn alt",text:"Всем уже отправлено",onClick:start}));return;}
       box.appendChild(el("div",{class:"prev",text:d.sample}));
-      box.appendChild(el("div",{class:"row"},[el("button",{class:"ibtn",text:"Отправить ("+d.todo+")",onClick:send}),el("button",{class:"ibtn alt",text:"Отмена",onClick:start})]));
+      box.appendChild(el("div",{class:"row"},[el("button",{class:"ibtn",text:(d.todo?"Отправить ("+d.todo+")":"Запомнить, кого пригласить"),onClick:send}),el("button",{class:"ibtn alt",text:"Отмена",onClick:start})]));
     }).catch(function(){box.textContent="";msg("Нет связи с сервером, попробуйте ещё раз.","err");box.appendChild(el("button",{class:"ibtn alt",text:"Назад",onClick:start}));});
   }
   function send(){
