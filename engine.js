@@ -878,7 +878,7 @@ function renderFinance() {
       pw.textContent = Object.entries(w).sort((a,b)=>b[1]-a[1])
         .map(function(e){ return e[0].toLowerCase()+' '+fmt(Math.round(e[1])); }).join(' · ');
     } else if(pb){
-      pw.textContent = 'способы оплаты: обнови закладку «💳 BigBen → оплаты» и нажми её в CRM';
+      pw.textContent = 'оплаты обновляются с сервера каждый день в 12:40';
     } else pw.textContent='';
   }
   const ps=document.getElementById('paidSub');
