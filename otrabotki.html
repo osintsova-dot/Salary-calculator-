@@ -63,6 +63,8 @@ header .sub{font-size:12px;opacity:.9;margin-top:3px}
 .mdays{font-size:12px;color:#4a4a58;text-align:right}
 .day{white-space:nowrap}
 .day.ok{color:#0a7a68;font-weight:700}
+.hw{display:inline-block;font-size:11px;font-weight:700;padding:1px 6px;border-radius:8px;margin-left:3px;vertical-align:1px}
+.hw.on{background:#efe9fb;color:#6C3FC5}.hw.home{background:#fff5d6;color:#8a6500}
 .wsel{font-family:inherit;font-size:13px;padding:7px 10px;border-radius:12px;border:1.5px solid var(--line);background:#fff}
 .rephd{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px 14px;border-bottom:1px solid var(--line);flex-wrap:wrap}
 .repsub{font-size:11.5px;color:var(--mut);margin-top:2px}
@@ -246,9 +248,9 @@ function renderReport(){
   ]);
   pane.appendChild(head);
   if(!rep.length){pane.appendChild(el("div",{class:"empty",text:"За эту неделю пропусков нет"}));return;}
-  var tot=0,done=0;
-  rep.forEach(function(g){g.students.forEach(function(s){tot++;if(s.done)done++;});});
-  pane.appendChild(el("div",{class:"repsum",text:"Неделя "+weekLabel(ARCHWEEK)+" · пропустили: "+tot+" · отработали: "+done+" · осталось: "+(tot-done)}));
+  var tot=0,done=0,non=0,nho=0;
+  rep.forEach(function(g){g.students.forEach(function(s){tot++;if(s.done)done++;(s.dates||[]).forEach(function(d){var h=(s.how||{})[d];if(h==="online")non++;else if(h==="home")nho++;});});});
+  pane.appendChild(el("div",{class:"repsum",text:"Неделя "+weekLabel(ARCHWEEK)+" · пропустили: "+tot+" · отработали: "+done+" · осталось: "+(tot-done)+" · уроков онлайн: "+non+" · сам дома: "+nho}));
   var tbl=el("table",{class:"rep"});
   var thead=el("thead",{},[el("tr",{},[
     el("th",{text:"Группа"}),el("th",{text:"Ученик"}),el("th",{text:"Пропуски"}),el("th",{text:"Причина"}),el("th",{text:"Отработал"})
@@ -265,12 +267,23 @@ function renderReport(){
         el("td",{text:s.fio}),
         el("td",{text:dates}),
         el("td",{text:uniq}),
-        el("td",{text:s.done?("да, "+fmtDate(s.doneDate)):"нет"})
+        howCell(s)
       ]));
     });
   });
   tbl.appendChild(tb);
   pane.appendChild(tbl);
+}
+// «как отработан»: онлайн (у Инги) / сам («Урок дома») — по каждой дате пропуска
+function howTag(h){return h==="online"?el("span",{class:"hw on",text:"онлайн"}):h==="home"?el("span",{class:"hw home",text:"сам"}):null;}
+function howCell(s){
+  var how=s.how||{},td=el("td"),any=false;
+  (s.dates||[]).forEach(function(d,i){var t=howTag(how[d]);if(!t)return;any=true;
+    if(td.childNodes.length)td.appendChild(document.createTextNode(" "));
+    td.appendChild(el("span",{class:"day",text:fmtDate(d)}));td.appendChild(t);});
+  if(!any)td.textContent=s.done?("да, "+fmtDate(s.doneDate)):"нет";
+  else if((s.dates||[]).some(function(d){return !how[d];})&&!s.done)td.appendChild(document.createTextNode(" · остальное нет"));
+  return td;
 }
 // КАРТИНА МЕСЯЦА: группы сворачиваются, внутри — дети, их пропуски (с причиной) и что отработано.
 var MON=null, MONKEY=null;
@@ -293,9 +306,9 @@ function renderMonth(){
     el("div",{},[el("b",{text:"Пропуски и отработки за месяц"}),el("div",{class:"repsub",text:"данные "+(cur.at?fmtDT(cur.at):"—")})]),
     el("div",{style:"display:flex;gap:8px;align-items:center;flex-wrap:wrap"},[sel,el("button",{class:"prt",text:"🖨 Печать",onClick:function(){window.print();}})])
   ]));
-  var tk=0,td=0,tm=0;
-  cur.groups.forEach(function(g){g.students.forEach(function(s){tk++;tm+=s.misses;td+=s.done;});});
-  pane.appendChild(el("div",{class:"repsum",text:"Детей с пропусками: "+tk+" · пропусков: "+tm+" · отработано: "+td+" ("+(tm?Math.round(td/tm*100):0)+"%)"}));
+  var tk=0,td=0,tm=0,mon=0,mho=0;
+  cur.groups.forEach(function(g){g.students.forEach(function(s){tk++;tm+=s.misses;td+=s.done;(s.days||[]).forEach(function(d){if(d.how==="online")mon++;else if(d.how==="home")mho++;});});});
+  pane.appendChild(el("div",{class:"repsum",text:"Детей с пропусками: "+tk+" · пропусков: "+tm+" · отработано: "+td+" ("+(tm?Math.round(td/tm*100):0)+"%) · из них онлайн: "+mon+" · сам дома: "+mho}));
   cur.groups.forEach(function(g){
     var miss=0,done=0;g.students.forEach(function(s){miss+=s.misses;done+=s.done;});
     var det=el("details",{class:"gdet"});
@@ -313,6 +326,7 @@ function renderMonth(){
         if(i)wrap.appendChild(document.createTextNode(" "));
         wrap.appendChild(el("span",{class:"day"+(d.done?" ok":"")+(d.why==="n"?" noresp":""),
           text:fmtDate(d.date)+(d.done?" ✓":"")+(d.why==="n"?" (неоплач.)":"")}));
+        var t=howTag(d.how||(d.done?"online":""));if(t)wrap.appendChild(t);
       });
       det.appendChild(line);
     });
