@@ -68,6 +68,12 @@ header .sub{font-size:12px;opacity:.9;margin-top:3px}
 .wsel{font-family:inherit;font-size:13px;padding:7px 10px;border-radius:12px;border:1.5px solid var(--line);background:#fff}
 .rephd{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px 14px;border-bottom:1px solid var(--line);flex-wrap:wrap}
 .repsub{font-size:11.5px;color:var(--mut);margin-top:2px}
+#cancels:empty{display:none}
+#cancels{padding:12px 16px 0}
+.cnl{display:flex;gap:10px;align-items:flex-start;background:#fdecec;border:1.5px solid #f3b4b4;color:#8a1c1c;border-radius:14px;padding:12px 14px;margin-bottom:8px}
+.cnl b{display:block;font-size:15px;color:#b42318}
+.cnl .cw{font-size:13px;margin-top:2px}
+.cnl .ci{font-size:22px;line-height:1}
 .repsum{padding:8px 14px;font-size:12.5px;color:var(--mut)}
 .prt{font-family:inherit;font-size:13px;font-weight:600;padding:7px 14px;border-radius:18px;border:1.5px solid var(--purple);background:#fff;color:var(--purple);cursor:pointer}
 table.rep{width:100%;border-collapse:collapse;font-size:12.5px}
@@ -126,6 +132,7 @@ table.rep tr.d td:last-child{color:#0a7a68;font-weight:600}
       </div>
     </div>
   </header>
+  <div id="cancels"></div>
   <div class="tabs">
     <button id="tabL" class="on" onclick="showTab('L')">📋 Списки (обзвон)</button>
     <button id="tabP" onclick="showTab('P')">💰 Оплата</button>
@@ -200,9 +207,22 @@ function load(){
       if(!d.ok){document.getElementById("paneL").textContent=(d.error||"ошибка")+" — проверьте код";return;}
       DATA=d;MARKS=d.marks||{};
       document.getElementById("dataAt").textContent = d.at?("данные на "+fmtDT(d.at)):"нет данных — сбор ещё не запускался";
-      renderLists();renderPay();
+      renderCancels();renderLists();renderPay();
     })
     .catch(function(){document.getElementById("paneL").textContent="нет связи с сервером";});
+}
+// СНЯТЫЕ ОТРАБОТКИ (бот снял: за 30 мин нет подтверждения или все отказались) — Инге видно здесь, без бота (01.11.2026)
+function renderCancels(){
+  var box=document.getElementById("cancels");box.textContent="";
+  var today=new Date(Date.now()+7*3600e3).toISOString().slice(0,10);
+  var WD=["вс","пн","вт","ср","чт","пт","сб"];
+  (DATA.cancels||[]).filter(function(c){return c.date>=today;}).sort(function(a,b){return (a.date+a.lk).localeCompare(b.date+b.lk);}).forEach(function(c){
+    var lbl=(DATA.labels&&DATA.labels[c.lk])||c.lk,sch=(DATA.otrSched&&DATA.otrSched[c.lk])||"";
+    var day=c.date===today?"сегодня":WD[new Date(c.date+"T12:00:00Z").getUTCDay()]+" "+fmtDate(c.date);
+    box.appendChild(el("div",{class:"cnl"},[el("div",{class:"ci",text:"🚫"}),el("div",{},[
+      el("b",{text:"Отработка "+lbl+" "+day+" снята — в Zoom выходить не нужно"}),
+      el("div",{class:"cw",text:(c.why?"Причина: "+c.why+". ":"")+"Родителям бот уже написал об отмене."+(sch?" Обычное время: "+sch+".":"")})])]));
+  });
 }
 function showTab(t){
   document.getElementById("tabL").className=t==="L"?"on":"";
